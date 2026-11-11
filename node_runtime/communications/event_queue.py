@@ -63,6 +63,7 @@ class EventQueueManager:
         action: str = "alert",
         latency_ms: int = 0,
         frame_id: int = 0,
+        source_id: str = "builtin",
     ) -> None:
         """
         Handle a newly fired threat event:
@@ -78,6 +79,7 @@ class EventQueueManager:
             action=action,
             latency_ms=latency_ms,
             frame_id=frame_id,
+            source_id=source_id,
         )
 
         sent = False

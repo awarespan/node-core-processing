@@ -203,6 +203,50 @@ class Settings:
         default_factory=lambda: _get_str("SIREN_FILE", str(REPO_ROOT / "Samples" / "siren.wav"))
     )
 
+    # Volunteer Media Gateway
+    volunteer_gateway_enabled: bool = field(
+        default_factory=lambda: _get_bool("VOLUNTEER_GATEWAY_ENABLED", True)
+    )
+    volunteer_gateway_host: str = field(
+        default_factory=lambda: _get_str("VOLUNTEER_GATEWAY_HOST", "0.0.0.0")
+    )
+    volunteer_gateway_port: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_GATEWAY_PORT", 8443)
+    )
+    volunteer_max_sessions: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_MAX_SESSIONS", 5)
+    )
+    volunteer_max_cameras: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_MAX_CAMERAS", 2)
+    )
+    volunteer_max_microphones: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_MAX_MICROPHONES", 2)
+    )
+    volunteer_pairing_timeout_sec: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_PAIRING_TIMEOUT_SEC", 300)
+    )
+    volunteer_heartbeat_timeout_sec: int = field(
+        default_factory=lambda: _get_int("VOLUNTEER_HEARTBEAT_TIMEOUT_SEC", 30)
+    )
+    volunteer_portal_static_dir: str = field(
+        default_factory=lambda: _get_str("VOLUNTEER_PORTAL_STATIC_DIR", str(REPO_ROOT / "static" / "volunteer"))
+    )
+    totp_secret_file: str = field(
+        default_factory=lambda: _get_str("TOTP_SECRET_FILE", "/var/lib/awarespan/totp_secret.json")
+    )
+    totp_window: int = field(
+        default_factory=lambda: _get_int("TOTP_WINDOW", 1)
+    )
+    telegram_queue_path: str = field(
+        default_factory=lambda: _get_str("TELEGRAM_QUEUE_PATH", "/tmp/awarespan_telegram_queue.db")
+    )
+    ap_ssid: str = field(
+        default_factory=lambda: _get_str("AP_SSID", "AWARESPAN-AP")
+    )
+    ap_gateway_ip: str = field(
+        default_factory=lambda: _get_str("AP_GATEWAY_IP", "192.168.4.1")
+    )
+
     # Logging
     log_level: str = field(default_factory=lambda: _get_str("LOG_LEVEL", "INFO").upper())
     log_dir: str = field(default_factory=lambda: _get_str("LOG_DIR", "/var/log/awarespan"))

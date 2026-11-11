@@ -36,6 +36,7 @@ class ThreatEvent:
     latency_ms: int = 0
     frame_id: int = 0
     model: str = ""
+    source_id: str = "builtin"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

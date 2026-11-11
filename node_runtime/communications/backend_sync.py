@@ -34,6 +34,7 @@ def build_threat_event(
     action: str = "alert",
     latency_ms: int = 0,
     frame_id: int = 0,
+    source_id: str = "builtin",
 ) -> ThreatEvent:
     """Build a standard ThreatEvent instance."""
     now_ms = int(time.time() * 1000)
@@ -47,6 +48,7 @@ def build_threat_event(
         latency_ms=latency_ms,
         frame_id=frame_id,
         model=model,
+        source_id=source_id,
     )
 
 
