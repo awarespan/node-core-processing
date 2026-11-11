@@ -99,7 +99,10 @@ def test_telegram_queue_drain(tmp_path):
         # Start worker briefly to drain
         notifier.start()
         notifier._wake_event.set()
-        time.sleep(2.5)
+        for _ in range(40):
+            if notifier.get_pending_count() == 0:
+                break
+            time.sleep(0.1)
         notifier.stop()
 
     assert notifier.get_pending_count() == 0
