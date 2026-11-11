@@ -141,7 +141,7 @@ def run_knife_detection_demo(model_path: str = None):
 
     print(f"\nDetections Found: {len(detections)}")
     for d in detections:
-        print(f"  • Class: {d.label} | Conf: {d.confidence:.2f} | Box: {d.box}")
+        print(f"  • Class: {d.label} | Conf: {d.confidence:.2f} | BBox: {d.bbox}")
 
     print(f"Threat Tier: {assessment.tier.upper()} | Confidence: {assessment.max_confidence:.2f}")
 
