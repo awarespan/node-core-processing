@@ -1,0 +1,12 @@
+[Unit]
+Description=AWARESPAN Automatic Update Check Timer
+Documentation=https://github.com/awarespan/node-core-processing
+After=network-online.target
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

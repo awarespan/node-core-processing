@@ -1,0 +1,5 @@
+# AWARESPAN Development & Testing Requirements
+-r runtime.txt
+pytest>=7.0.0
+pytest-mock>=3.10.0
+flake8>=6.0.0

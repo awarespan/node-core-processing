@@ -3,142 +3,95 @@
 > **Tagline:** Awareness Without Boundaries.  
 > **Official Problem Statement:** An AI-Powered Safety Device.  
 > **Project Contact:** awarespan@bchbenjamin.in  
+> **Repository:** [https://github.com/awarespan/node-core-processing](https://github.com/awarespan/node-core-processing)
 
-Authoritative start/stop reference for the AWARESPAN edge node software and detection pipeline.
-
----
-
-## Network Reference
-
-| Component | Value |
-|---|---|
-| Raspberry Pi IP | Stored in `.env` → `IP_ADDRESS` (typically `10.253.13.25` on campus subnet) |
-| Pi edge server ingest port | `8765` |
-| Pi dashboard broadcast port | `8766` |
-| Laptop dashboard | `http://localhost:3000` |
-
-To locate the Pi on a new network: `ping -4 -n 1 raspberrypi.local` (Windows) or `ping raspberrypi.local` (Linux/Mac).
+Authoritative operational reference for starting, stopping, verifying, and monitoring the AWARESPAN edge node system.
 
 ---
 
-## Starting the System
+## 1. Network & Port Reference
 
-Start in this order. All three must be running for the full demo.
-
-### 1. Start the Raspberry Pi Edge Server
-
-SSH into the Pi from your laptop:
-
-```bash
-# Linux/Mac
-ssh $USERNAME@$IP_ADDRESS
-
-# Windows PowerShell
-ssh $env:USERNAME@$env:IP_ADDRESS
-```
-
-Once connected, start the edge server in the background:
-
-```bash
-nohup ~/edge-ai/pi/.venv/bin/python3 ~/edge-ai/pi/edge_server.py \
-    --config ~/edge-ai/pi/config.json \
-    --model ~/edge-ai/pi/yolov8n.pt \
-    > ~/edge-ai/pi/server.log 2>&1 &
-```
-
-Monitor the log:
-```bash
-tail -f ~/edge-ai/pi/server.log
-```
-
-Verify it's running:
-```bash
-ps aux | grep edge_server.py
-```
-
-### 2. Start the Next.js Dashboard
-
-On your laptop:
-
-```bash
-cd Prototype/dashboard
-npm run dev
-```
-
-Open **http://localhost:3000** in Chrome or Firefox. Allow microphone permissions when prompted.
-
-### 3. Start the Laptop Camera Stream Client
-
-In a separate terminal on your laptop:
-
-```bash
-cd Prototype
-.venv/Scripts/python.exe laptop/stream_client.py --pi-host $PI_IP    # Windows
-# or
-.venv/bin/python3 laptop/stream_client.py --pi-host $PI_IP           # Linux/Mac
-```
-
-The Pi log will show `connection open` and begin printing YOLOv8 detections.
+| Component | Default Port / URL | Description |
+|---|---|---|
+| Raspberry Pi IP | Configured in `.env` (`192.168.0.125`) | Edge processing hardware |
+| Node Runtime Stream & Health | `8766` (`/ingest` and `/`) | WebSockets & diagnostic `/health` |
+| Local Dashboard | `http://localhost:3000` | Web observation dashboard |
+| Backend REST API | `https://api.awarespan.bchbenjamin.in/` | Cloud API |
+| Central MQTT Broker | `broker.hivemq.com:1883` | Outbound telemetry & incident broker |
 
 ---
 
-## Stopping the System
+## 2. Managing System Services
 
-### Stop the Laptop Stream Client
-Press `Ctrl+C` in the terminal running `stream_client.py`.
-
-Or kill it by process:
-
-```powershell
-# Windows
-Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%stream_client%'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-```
-
-### Stop the Dashboard
-Press `Ctrl+C` in the terminal running `npm run dev`.
-
-Or kill by port:
-
-```powershell
-# Windows
-Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
-```
-
-### Stop the Raspberry Pi Edge Server
-
-Via SSH on the Pi:
+On the Raspberry Pi, services run under systemd:
 
 ```bash
-pkill -f edge_server.py
+# Check status of all node components
+./scripts/status.sh
+
+# Restart node runtime
+sudo systemctl restart awarespan-node.service
+
+# Restart power monitor
+sudo systemctl restart awarespan-power-monitor.service
+
+# View live runtime logs
+journalctl -u awarespan-node.service -f --no-pager
 ```
 
-Verify: `ps aux | grep edge_server.py` should return nothing.
+---
+
+## 3. Running Edge Runtime Standalone (Testing / Development)
+
+To run the Node Runtime manually without systemd:
+
+```bash
+# From repository root
+python3 -m node_runtime.main --port 8766 --conf 0.45
+```
+
+The runtime will:
+1. Load YOLOv8 weights from `shared/models/yolov8n_best_weapon.pt`.
+2. Start the WebSocket server on port `8766`.
+3. Connect outbound to the MQTT broker (`sip/{nodeId}/heartbeat`, `sip/{nodeId}/incidents`).
+4. Initialize the offline SQLite incident queue (`/tmp/awarespan_event_queue.db`).
+5. Process incoming video frames on `/ingest` and broadcast annotated frames on `/`.
 
 ---
 
-## Autonomous Training (Pi-side, runs independently)
+## 4. Laptop Video Stream Client
 
-The Pi's training pipeline runs completely independently from the laptop demo system. It is managed by systemd and does not need to be started or stopped manually.
+To feed laptop webcam frames to the Raspberry Pi:
 
-| Action | Command (run on Pi via SSH) |
-|---|---|
-| Check training status | `sudo systemctl status weapon-training.service` |
-| Check Telegram bot status | `sudo systemctl status weapon-bot.service` |
-| View training log | `tail -f ~/edge-ai/logs/train.log` |
-| Check current epoch | `tail -n 5 ~/runs/detect/train/results.csv` |
-| Restart training | `sudo systemctl restart weapon-training.service` |
-| Stop training | `sudo systemctl stop weapon-training.service` |
-
-Training autostarts on every boot. Checkpoints are saved every 5 epochs to `~/runs/detect/train/weights/`.
+```bash
+# From your laptop
+python3 laptop/stream_client.py --pi-host 192.168.0.125 --port 8766
+```
 
 ---
 
-## Troubleshooting
+## 5. Automated Updates and Rollbacks
 
-| Problem | Fix |
-|---|---|
-| Can't find Pi on network | Run `ping raspberrypi.local` or check router DHCP table; update `.env` with new IP |
-| `npm run dev` fails | Ensure you're in `Prototype/dashboard/`; run `npm install` if node_modules is missing |
-| Stream client can't connect | Verify edge server is running on Pi; check `IP_ADDRESS` in `.env` |
-| Pi SSH refused | Pi may be rebooting; wait 60s and retry |
-| Dashboard shows no feed | Check `dashboard/.env.local` has correct `NEXT_PUBLIC_PI_WS_URL` |
+The node automatically checks GitHub `main` every 2 minutes. To manage updates manually:
+
+```bash
+# 1. Check for remote updates without applying
+python3 -m node_manager.cli check
+
+# 2. Trigger staged update immediately
+./scripts/update.sh
+
+# 3. Roll back to last verified working revision
+./scripts/rollback.sh
+
+# 4. View update history and version state
+python3 -m node_manager.cli status
+```
+
+---
+
+## 6. Telegram Telemetry & Threat Testing
+
+- Message `/status` to the bot to check thermals, throttled flags, and service health.
+- Message `/threats` to see the current classification rules.
+- **Upload any photo** to test real-time weapon and threat inference.

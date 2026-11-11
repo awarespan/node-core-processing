@@ -1,0 +1,15 @@
+[Unit]
+Description=AWARESPAN Model Training Service (Disabled by default on Production Nodes)
+Documentation=https://github.com/awarespan/node-core-processing
+After=network-online.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKDIR%
+ExecStart=%PYTHON% -m ml_pipeline.training.train_autonomous
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+# Explicitly omitted WantedBy=multi-user.target to prevent automatic startup on production nodes.

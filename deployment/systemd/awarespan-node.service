@@ -1,0 +1,19 @@
+[Unit]
+Description=AWARESPAN Edge Node Runtime Core (Inference & Safety Decision Engine)
+Documentation=https://github.com/awarespan/node-core-processing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKDIR%
+ExecStartPre=/bin/sleep 2
+ExecStart=%PYTHON% -m node_runtime.main
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

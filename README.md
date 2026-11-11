@@ -3,156 +3,241 @@
 > **Tagline:** Awareness Without Boundaries.  
 > **Official Problem Statement:** An AI-Powered Safety Device.  
 > **Project Contact:** awarespan@bchbenjamin.in  
-> **Institution:** Atria Institute of Technology, Bengaluru (ASIP 24UTAI13)
+> **Repository:** [https://github.com/awarespan/node-core-processing](https://github.com/awarespan/node-core-processing)
 
-Edge node core processing and training engine for the **AWARESPAN** platform. Connects sensor streams (camera, audio) to the Raspberry Pi 5 Edge Compute Core running YOLOv8 threat detection, two-tier deterrence logic, MQTT cloud sync, and autonomous edge training.
+Edge node core processing, autonomous lifecycle manager, and threat assessment engine for the **AWARESPAN** platform. Connects real-time video/audio sensor streams to the Raspberry Pi 5 Edge Compute Core running YOLOv8 threat detection, two-tier deterrence logic, cloud MQTT/REST synchronization, durable offline event queueing, and safe automated git updates.
 
 ---
 
-## Current Status
+## 1. Modular Architecture Overview
 
-**Backend API:** `https://api.awarespan.bchbenjamin.in/`  
-Verify health:
+The codebase is organized into **three independently managed subsystems** within a single repository:
+
+```
+node-core-processing/
+├── node_manager/           # Module 1: Lifecycle, auto-updates, rollback & health verification
+│   ├── updater/            # Update checker, staged executor, rollback & version state
+│   ├── service_manager.py  # Systemd controller and selective restart resolver
+│   ├── health_check.py     # Bounded runtime diagnostic probes
+│   └── cli.py              # Unified CLI: status, check, update, rollback, health
+│
+├── node_runtime/           # Module 2: Production edge runtime (NO training code)
+│   ├── detection/          # Visual (YOLOv8), acoustic, and hardware sensor interfaces
+│   ├── processing/         # Classifier, two-tier threat assessment, response selector
+│   ├── deterrence/         # Siren (aplay) audio deterrence and strobe triggers
+│   ├── communications/     # MQTT client, REST fallback, SQLite offline event queue
+│   ├── monitoring/         # Hardware power monitor & interactive Telegram bot
+│   └── main.py             # Production runtime entry point
+│
+├── ml_pipeline/            # Module 3: Model training & evaluation (DISABLED on nodes)
+│   ├── datasets/           # Dataset registry, download/merge, audit & deduplication
+│   ├── training/           # Autonomous training orchestrator, checkpoint resume & OOM fallback
+│   ├── evaluation/         # Batch video/audio evaluation
+│   └── packaging/          # Model artifact packaging & metadata generator
+│
+├── shared/                 # Common utilities across all subsystems
+│   ├── config/             # Canonical root .env discovery and typed settings
+│   ├── logging/            # Centralized logger with automatic credential scrubber
+│   ├── models/             # Shared dataclasses (events, detections, heartbeats, state)
+│   └── utilities/          # FileLock, hardware inspection (Pi throttled flags), safe subprocess
+│
+├── deployment/             # Systemd service & timer unit templates and sudoers policy
+│   ├── systemd/            # awarespan-updater, awarespan-node, awarespan-power-monitor, etc.
+│   └── sudoers/            # Passwordless systemctl permissions for non-root auto-updater
+│
+├── scripts/                # Operator CLI & deployment scripts
+│   ├── install.sh          # Idempotent installer (virtualenv, deps, systemd)
+│   ├── uninstall.sh        # Clean uninstaller (--purge support)
+│   ├── update.sh           # Manual update trigger CLI
+│   ├── rollback.sh         # Manual rollback trigger CLI
+│   └── status.sh           # Full diagnostic status CLI
+│
+└── requirements/           # Segregated dependency boundaries
+    ├── runtime.txt         # Production node runtime dependencies
+    ├── training.txt        # Dedicated ML training dependencies
+    └── dev.txt             # Testing & linting dependencies
+```
+
+---
+
+## 2. System Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph Sensors["Edge Sensors"]
+        CAM["Camera / RTSP / Ingest Stream"]
+        MIC["Microphone / Audio Sensor"]
+        HW["Hardware Sensors (PIR / Tamper)"]
+    end
+
+    subgraph Runtime["Module 2: Node Runtime"]
+        VD["Visual Detector (YOLOv8)"]
+        AC["Acoustic Classifier"]
+        HS["Hardware Sensors Interface"]
+        FUS["Multi-Modal Fusion Classifier"]
+        TA["Threat Assessor (Tier 1 vs Tier 2)"]
+        RS["Response Selector"]
+        DET["Deterrence Controller (Siren / Strobe)"]
+        COMM["Communications Engine"]
+        EQ["SQLite Offline Event Queue"]
+    end
+
+    subgraph Manager["Module 1: Node Manager & Updater"]
+        UC["Update Checker (GitHub main)"]
+        UE["Update Executor (Staged)"]
+        RB["Rollback Manager"]
+        VS["Version State Manager"]
+        HC["Health Checker"]
+        SM["Systemd Service Manager"]
+    end
+
+    subgraph Cloud["Cloud Infrastructure"]
+        MQTT["MQTT Broker (sip/{nodeId}/...)"]
+        REST["Central REST API (/api/nodes/...)"]
+        TG["Telegram Bot & Alert Webhooks"]
+    end
+
+    CAM --> VD
+    MIC --> AC
+    HW --> HS
+
+    VD --> FUS
+    AC --> FUS
+    HS --> FUS
+
+    FUS --> TA
+    TA --> RS
+    RS --> DET
+    RS --> COMM
+
+    COMM --> MQTT
+    COMM --> REST
+    COMM -.->|Offline Fallback| EQ
+    EQ -.->|Replay on Reconnect| COMM
+
+    UC --> UE
+    UE --> SM
+    UE --> HC
+    HC -.->|Failure Trigger| RB
+    UE --> VS
+    COMM --> TG
+```
+
+---
+
+## 3. Automatic Update Lifecycle Diagram
+
+Production nodes poll the `main` branch on GitHub (default interval: 120s via `awarespan-updater.timer`). Updates are applied atomically without human intervention:
+
+```mermaid
+flowchart TD
+    Start["Systemd Timer Triggered (every 120s)"] --> Lock["Acquire FileLock (/tmp/awarespan-update.lock)"]
+    Lock --> NetCheck{"Internet Reachable?"}
+    NetCheck -- No --> Abort["Skip check & release lock"]
+    NetCheck -- Yes --> DirtyCheck{"Working Tree Clean?"}
+    DirtyCheck -- No --> WarnDirty["Log warning & block auto-update"]
+    DirtyCheck -- Yes --> Fetch["git fetch origin main"]
+    Fetch --> CompCommit{"Remote Commit != HEAD?"}
+    CompCommit -- No --> Idle["Node is up to date (IDLE)"]
+    CompCommit -- Yes --> RecordPre["Record rollback_target = current HEAD"]
+    RecordPre --> SyntaxCheck{"Validate Syntax (py_compile on incoming code)?"}
+    SyntaxCheck -- Failed --> Reject["Abort update & alert Telegram"]
+    SyntaxCheck -- Passed --> Merge["Fast-forward merge (git merge --ff-only)"]
+    Merge --> CheckDeps{"requirements/runtime.txt changed?"}
+    CheckDeps -- Yes --> PipInstall["pip install -r requirements/runtime.txt"]
+    CheckDeps -- No --> ResolveServices["Determine affected services"]
+    PipInstall --> ResolveServices
+    ResolveServices --> Restart["systemctl restart affected services"]
+    Restart --> HealthProbe{"Health Check Passed within 25s?"}
+    HealthProbe -- Yes --> MarkSuccess["Record SUCCESS in version_state.json & alert Telegram"]
+    HealthProbe -- No --> TriggerRB["Trigger Rollback (git reset --hard rollback_target)"]
+    TriggerRB --> RestartPrev["systemctl restart previous services"]
+    RestartPrev --> MarkRB["Record ROLLED_BACK in version_state.json & alert Telegram"]
+```
+
+---
+
+## 4. Installation & Deployment
+
+### Quick Install on Raspberry Pi
+From repository root on the Pi:
 ```bash
-curl https://api.awarespan.bchbenjamin.in/health
+./scripts/install.sh
 ```
 
-**Pi Connectivity:**
-| Interface | Address | Status |
-|-----------|---------|--------|
-| WiFi (wlan0) | `192.168.0.125` | Normal operation |
-| USB gadget (usb0) | `10.42.0.1/24` | Recovery / no-network scenarios |
+The installer will:
+1. Validate hardware and Linux prerequisites.
+2. Create runtime directories (`/var/lib/awarespan`, `/var/log/awarespan`, `/var/lock/awarespan`).
+3. Set up the Python virtual environment and install `requirements/runtime.txt`.
+4. Deploy systemd units to `/etc/systemd/system/`.
+5. Configure passwordless service restart permissions for the auto-updater in `/etc/sudoers.d/awarespan`.
+6. Enable and start `awarespan-updater.timer`, `awarespan-node.service`, and `awarespan-power-monitor.service`.
 
-**Dataset Registry:** 7 datasets tracked in `dataset_registry.json` — 2 TRAINING_ELIGIBLE (Roboflow Gun+Knife, Zenodo NESTLER), 5 pending download/validation (Kaggle Weapon Detection, Kaggle Pet Detection, TigDog, Safari, Elephants+Foxes).
+### Uninstallation
+```bash
+# Clean service uninstallation
+./scripts/uninstall.sh
 
-**Power Monitor:** Active as `sip-power-monitor.service` — polls every 60s, sends ONE Telegram alert after >30 min undervoltage.
-
----
-
-## Architecture Overview
-
-```
-Laptop Sensor Node          →   Pi 5 Edge Core              →   Outputs
-Webcam/Mic Capture              YOLOv8 + Threat Tiering
-(stream_client.py)              (edge_server.py)
-WebSocket JPEG frames    →      Annotated frames + JSON   →   Dashboard (port 8766)
-                                                           →   Tier 1: Siren/LED deterrence
-                                                           →   Tier 2: Police/EMS alert API
+# Complete purge including state and logs
+./scripts/uninstall.sh --purge
 ```
 
 ---
 
-## Quick Start
+## 5. Operations & CLI Reference
 
-See **[RUN_GUIDE.md](RUN_GUIDE.md)** for the exact step-by-step commands to start and stop the system.
-
-**Three components run in order:**
-1. Raspberry Pi edge server (`edge_server.py`) — via SSH
-2. Next.js dashboard (`npm run dev`) — on laptop
-3. Laptop camera stream client (`stream_client.py`) — on laptop
-
-Network config is in `.env` — update `IP_ADDRESS` if the Pi's DHCP address changes.
-
----
-
-## Autonomous Edge Training
-
-The Pi runs a 24/7 autonomous YOLOv8 training pipeline independent of this laptop:
-
-- **Systemd autostart:** `weapon-training.service` starts training on every boot and auto-recovers from crashes
-- **Dataset registry:** `dataset_registry.py` tracks all datasets persistently — sources, licenses, status, training runs
-- **Dataset audit:** `dataset_audit.py` validates images, YOLO labels, class IDs, and detects duplicates
-- **Power monitor:** `power_monitor.py` runs as an independent systemd service — polls `vcgencmd get_throttled` every 60s, sends ONE Telegram alert after >30 min of continuous undervoltage
-- **Datasets:** Unified dataset with 3 classes: `gun`, `knife`, `dangerous_animal`
-  - Weapon: Roboflow Gun+Knife Detection, Kaggle Weapon Detection
-  - Animals: Zenodo NESTLER (Safari, Elephants, Foxes), Kaggle Pet Detection, TigDog
-- **Checkpoint verification:** `train_autonomous.py` verifies dataset manifest and checkpoint class compatibility before resuming
-- **Telegram bot:** Remote monitoring and image inference via Telegram — message the bot for a live progress update or send an image for weapon detection
-- **Script:** `pi/train_autonomous.py` — handles manifest verification, checkpoint compatibility, OOM fallback, and continuous 150-epoch runs. Run with:
-  ```bash
-  # Full run with manifest and checkpoint verification
-  python train_autonomous.py --dataset unified --epochs 150 --device cuda
-
-  # Dry-run (verify manifests and checkpoint only)
-  python train_autonomous.py --dry-run
-
-  # Resume with explicit checkpoint
-  python train_autonomous.py --resume-from runs/train/exp12/weights/best.pt
-  ```
-
-See **[CONTEXT.md](CONTEXT/CONTEXT.md)** Sections 16–18 for full details on the training pipeline, batch processing, and Telegram integration.
-
----
-
-## Repository Structure
-
+### Check Diagnostic Status
+```bash
+./scripts/status.sh
 ```
-Prototype/
-├── pi/                     # Raspberry Pi scripts
-│   ├── edge_server.py      # Main WebSocket inference server
-│   ├── train_autonomous.py # Autonomous YOLOv8 training with manifest verification
-│   ├── download_and_merge.py # Dataset downloader and merger (Zenodo, Kaggle, TigDog)
-│   ├── dataset_registry.py # Persistent dataset tracking with atomic JSON writes
-│   ├── dataset_audit.py    # Forensic audit: checksum, class ID, duplicate, split leakage
-│   ├── power_monitor.py    # Independent undervoltage monitor (systemd service)
-│   ├── telegram_bot.py     # Interactive Telegram bot (status + image inference)
-│   ├── telegram_notify.py  # Automated progress notifications with IPv4/IPv6
-│   ├── mqtt_client.py      # MQTT bridge for Pi↔backend communication
-│   ├── backend_sync.py     # REST fallback for Pi→backend incident sync
-│   ├── register_datasets.py # Pre-populates dataset registry with known datasets
-│   ├── app_batch.py        # Batch video processing (frame-by-frame detection)
-│   ├── sound_event_batch.py# Batch audio processing (scream detection)
-│   ├── sip-edge.service    # systemd unit for edge_server
-│   ├── sip-power-monitor.service # systemd unit for power_monitor
-│   └── config.json / requirements.txt
-├── laptop/
-│   └── stream_client.py    # Webcam capture → WebSocket stream to Pi
-├── dashboard/              # Next.js control room dashboard
-├── Samples/                # Dataset samples and research paper figure candidates
-│   ├── weapon_samples/     # Raw weapon dataset images
-│   ├── fig3_candidates/    # Video detection screenshots (research paper Fig. 3)
-│   ├── fig4/               # Training curve (research paper Fig. 4)
-│   ├── paper_candidates/   # Best images selected for paper figures
-│   └── weapon-detection-1/ # Downloaded Roboflow weapon dataset
-├── CONTEXT/
-│   ├── CONTEXT.md          # Master project reference (single source of truth)
-│   └── Automating SIP Prototype Batch Processing.md  # Raw session log
-├── RUN_GUIDE.md            # Start/stop commands (authoritative)
-├── RASPBERRY_PI_SETUP.md   # First-time Pi setup guide
-└── THREAT_TESTING_GUIDE.md # How to demo threat detection
+Displays node identity, hardware model, current git commit, tracking branch, updater status, CPU temperature, undervoltage throttled status, and active systemd services.
+
+### Manual Update Check
+```bash
+python3 -m node_manager.cli check
+```
+
+### Trigger Update Immediately
+```bash
+./scripts/update.sh
+```
+
+### Trigger Manual Rollback
+```bash
+# Roll back to the automatically recorded rollback target:
+./scripts/rollback.sh
+
+# Or roll back to an explicit commit SHA:
+./scripts/rollback.sh --commit 5f4b005d
+```
+
+### Run Subsystem Health Probe
+```bash
+python3 -m node_manager.cli health
 ```
 
 ---
 
-## Documentation
+## 6. Model Training Policy
 
-| Document | Purpose |
-|---|---|
-| [CONTEXT.md](CONTEXT/CONTEXT.md) | Master reference: full system design, datasets, training pipeline, Telegram bot, research paper status, team details |
-| [RUN_GUIDE.md](RUN_GUIDE.md) | How to start and stop the live demo system |
-| [RASPBERRY_PI_SETUP.md](RASPBERRY_PI_SETUP.md) | First-time Pi hardware and OS setup |
-| [THREAT_TESTING_GUIDE.md](THREAT_TESTING_GUIDE.md) | How to test and demonstrate threat detection |
+**Model training is strictly disabled by default on production edge nodes (`ML_TRAINING_ENABLED=false`).**
+
+Production nodes perform real-time video ingestion, YOLO inference, threat assessment, deterrence siren playback, and telemetry publishing. Model training is executed on dedicated workstations or explicitly enabled environments:
+
+```bash
+# Dedicated training run (from workstation with GPU/CPU):
+python3 -m ml_pipeline.training.train_autonomous --epochs 100 --batch 4 --force
+
+# Packaging trained weights into versioned deployment artifacts:
+python3 -m ml_pipeline.packaging.model_packager --weights runs/detect/train/weights/best.pt --name yolov8n_best_weapon --version 1.1.0
+```
 
 ---
 
-## Network Configuration
+## 7. Interactive Telegram Bot
 
-The Pi is reachable via two interfaces:
-
-| Interface | Address | Use |
-|-----------|---------|-----|
-| WiFi (wlan0) | `192.168.0.125` | Normal operation |
-| USB gadget (usb0) | `10.42.0.1/24` | Recovery / no-network scenarios |
-
-Credentials are stored in `.env` (gitignored):
-
-```env
-IP_ADDRESS=192.168.0.125
-USERNAME=benjamin
-PASSWORD=<SSH_PASSWORD>
-```
-
-Dashboard WebSocket config: `dashboard/.env.local`
-```env
-NEXT_PUBLIC_PI_WS_URL=ws://<PI_IP>:8766
-```
+Production nodes feature an interactive Telegram Bot for remote telemetry and field threat testing:
+- `/status` — View node CPU temperature, throttled flags, and connectivity.
+- `/threats` — Display active Tier 1 and Tier 2 classification policies.
+- `/health` — Run bounded diagnostic probes.
+- **Photo Threat Test:** Send any photo directly to the bot. The node downloads the image, runs YOLOv8 weapon detection, annotates bounding boxes, classifies threats, and replies to the chat with the marked photo and threat decision.
