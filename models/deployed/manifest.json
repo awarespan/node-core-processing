@@ -1,0 +1,38 @@
+{
+  "manifest_version": "1.0.0",
+  "deployment_target": "Raspberry Pi 5 Model B Rev 1.1 (4GB)",
+  "generated_at": "2026-11-12T01:45:00Z",
+  "taxonomy_version": "1.0.0",
+  "active_models": [
+    {
+      "model_id": "awarespan-weapon-yolov8n",
+      "version": "1.0.0",
+      "role": "primary_weapon_detection",
+      "artifact_path": "shared/models/yolov8n_best_weapon.pt",
+      "sha256": "e817da6a6bd08861095bf456f10bbad19dc3eda46669282fc266ddc47dca3e34",
+      "framework": "ultralytics_yolov8",
+      "modality": "visual",
+      "supported_classes": ["weapon.firearm.handgun", "weapon.edged.knife"]
+    },
+    {
+      "model_id": "awarespan-general-yolov8n",
+      "version": "1.0.0",
+      "role": "fauna_and_perimeter_detection",
+      "artifact_path": "yolov8n.pt",
+      "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+      "framework": "ultralytics_yolov8",
+      "modality": "visual",
+      "supported_classes": ["animal.wildlife.general", "animal.wildlife.predator", "weapon.edged.knife"]
+    },
+    {
+      "model_id": "awarespan-yamnet-audio",
+      "version": "1.0.0",
+      "role": "acoustic_threat_detection",
+      "artifact_path": "models/working/audio/yamnet.h5",
+      "sha256": "13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744",
+      "framework": "yamnet_acoustic_dsp",
+      "modality": "acoustic",
+      "supported_classes": ["audio.threat.gunshot", "audio.threat.scream", "audio.threat.glass_break", "audio.threat.alarm"]
+    }
+  ]
+}

@@ -42,6 +42,11 @@ Thumbs.db
 .claude/
 .claude.json
 
+# Models & Weights
+models/working/
+models/archive/
+dist/
+
 # Legacy monorepo artifacts
 android-frontend/
 database/

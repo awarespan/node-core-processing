@@ -1,0 +1,156 @@
+{
+  "registry_version": "1.0.0",
+  "last_updated": "2026-11-12T01:45:00Z",
+  "models": {
+    "awarespan-weapon-yolov8n:1.0.0": {
+      "model_id": "awarespan-weapon-yolov8n",
+      "version": "1.0.0",
+      "display_name": "AWARESPAN Weapon Detector YOLOv8n (Production)",
+      "artifact_path": "shared/models/yolov8n_best_weapon.pt",
+      "sha256": "e817da6a6bd08861095bf456f10bbad19dc3eda46669282fc266ddc47dca3e34",
+      "framework": "ultralytics_yolov8",
+      "supported_classes": [
+        "weapon.firearm.handgun",
+        "weapon.edged.knife"
+      ],
+      "modality": "visual",
+      "task": "object_detection",
+      "input_requirements": {
+        "format": "RGB",
+        "resolution": [640, 640],
+        "channels": 3
+      },
+      "output_schema_version": "1.0.0",
+      "taxonomy_version": "1.0.0",
+      "state": "DEPLOYED",
+      "license_info": {
+        "license_name": "AGPL-3.0",
+        "redistributable": true,
+        "commercial_use": false,
+        "source_url": "https://github.com/awarespan/node-core-processing"
+      },
+      "evaluation_summary": {
+        "target_classes": ["gun", "knife"],
+        "fitness": 0.33656,
+        "input_imgsz": 640
+      },
+      "metadata": {
+        "deployment_target": "Raspberry Pi 5",
+        "runtime_service": "awarespan-node.service"
+      }
+    },
+    "awarespan-weapon-yolov8n-epoch80:1.0.0": {
+      "model_id": "awarespan-weapon-yolov8n-epoch80",
+      "version": "1.0.0",
+      "display_name": "AWARESPAN Weapon Peak Benchmark Epoch 80",
+      "artifact_path": "artifacts/model-checkpoints/recovered/epoch80_best_map.pt",
+      "sha256": "ac06e9281a7f20208549e739b9b1dd4f20e426b209d12027ac9122d920c80c90",
+      "framework": "ultralytics_yolov8",
+      "supported_classes": [
+        "weapon.firearm.handgun",
+        "weapon.edged.knife"
+      ],
+      "modality": "visual",
+      "task": "object_detection",
+      "input_requirements": {
+        "format": "RGB",
+        "resolution": [416, 416],
+        "channels": 3
+      },
+      "output_schema_version": "1.0.0",
+      "taxonomy_version": "1.0.0",
+      "state": "APPROVED",
+      "license_info": {
+        "license_name": "Internal / AWARESPAN",
+        "redistributable": true,
+        "commercial_use": true,
+        "source_url": "https://github.com/awarespan/node-core-processing"
+      },
+      "evaluation_summary": {
+        "epoch": 80,
+        "precision": 0.84800,
+        "recall": 0.72536,
+        "mAP50": 0.81557,
+        "mAP50_95": 0.60915,
+        "best_fitness": 0.6332
+      },
+      "metadata": {
+        "training_dataset": "unified_weapon_dataset",
+        "status": "candidate_for_deployment"
+      }
+    },
+    "awarespan-general-yolov8n:1.0.0": {
+      "model_id": "awarespan-general-yolov8n",
+      "version": "1.0.0",
+      "display_name": "AWARESPAN General Entity & Animal Detector YOLOv8n",
+      "artifact_path": "yolov8n.pt",
+      "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+      "framework": "ultralytics_yolov8",
+      "supported_classes": [
+        "animal.wildlife.general",
+        "animal.wildlife.predator",
+        "weapon.edged.knife"
+      ],
+      "modality": "visual",
+      "task": "object_detection",
+      "input_requirements": {
+        "format": "RGB",
+        "resolution": [640, 640],
+        "channels": 3
+      },
+      "output_schema_version": "1.0.0",
+      "taxonomy_version": "1.0.0",
+      "state": "EVALUATED",
+      "license_info": {
+        "license_name": "AGPL-3.0",
+        "redistributable": true,
+        "commercial_use": false,
+        "source_url": "https://github.com/ultralytics/ultralytics"
+      },
+      "evaluation_summary": {
+        "classes_count": 80,
+        "coco_mAP50_95": 0.373
+      },
+      "metadata": {
+        "domain": "animal_and_general_detection"
+      }
+    },
+    "awarespan-yamnet-audio:1.0.0": {
+      "model_id": "awarespan-yamnet-audio",
+      "version": "1.0.0",
+      "display_name": "AWARESPAN Acoustic Threat Classifier YAMNet",
+      "artifact_path": "models/working/audio/yamnet.h5",
+      "sha256": "13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744",
+      "framework": "yamnet_acoustic_dsp",
+      "supported_classes": [
+        "audio.threat.gunshot",
+        "audio.threat.scream",
+        "audio.threat.glass_break",
+        "audio.threat.alarm"
+      ],
+      "modality": "acoustic",
+      "task": "audio_classification",
+      "input_requirements": {
+        "format": "WAV_PCM",
+        "sample_rate": 16000,
+        "channels": 1
+      },
+      "output_schema_version": "1.0.0",
+      "taxonomy_version": "1.0.0",
+      "state": "LOADED",
+      "license_info": {
+        "license_name": "Apache-2.0",
+        "redistributable": true,
+        "commercial_use": true,
+        "source_url": "https://tfhub.dev/google/yamnet/1"
+      },
+      "evaluation_summary": {
+        "classes_count": 521,
+        "dataset": "AudioSet"
+      },
+      "metadata": {
+        "domain": "acoustic_threats"
+      }
+    }
+  }
+}

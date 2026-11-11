@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "taxonomy_id": "awarespan-threat-taxonomy",
+  "version": "1.0.0",
+  "last_updated": "2026-11-12T01:45:00Z",
+  "author": "AWARESPAN Safety Engineering",
+  "contact": "awarespan@bchbenjamin.in",
+  "description": "Comprehensive, vendor-agnostic threat and safety event taxonomy for edge multimodal intelligence.",
+  "categories": [
+    {
+      "id": "weapon",
+      "display_name": "Weapons & Dangerous Implements",
+      "description": "Visible firearms, bladed weapons, and destructive tools requiring rapid deterrence and operator alerting."
+    },
+    {
+      "id": "human_activity",
+      "display_name": "Human Activity & Physical Distress",
+      "description": "Objectively observable kinetic actions indicating physical distress, falls, or interpersonal violence."
+    },
+    {
+      "id": "animal",
+      "display_name": "Wildlife & Animal Presence",
+      "description": "Wildlife, livestock, or domestic animal detections. Passive presence is informational; proximity/aggression triggers safety alerts."
+    },
+    {
+      "id": "hazard",
+      "display_name": "Fire & Environmental Hazards",
+      "description": "Visible flame, smoke plume, or rapid thermal hazards threatening human life and infrastructure."
+    },
+    {
+      "id": "intrusion",
+      "display_name": "Intrusion & Perimeter Security",
+      "description": "Objective boundary violations, restricted-zone entries, or unauthorized physical incursions."
+    },
+    {
+      "id": "audio",
+      "display_name": "Acoustic Threat Events",
+      "description": "Auditory signatures of immediate danger, including gunshots, human screams, glass breakage, and industrial alarms."
+    }
+  ],
+  "classes": {
+    "weapon.firearm.handgun": {
+      "parent_category": "weapon",
+      "display_name": "Handgun / Pistol",
+      "definition": "Compact firearm designed for one- or two-handed operation, visible in human hand or exposed holster.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 4,
+      "default_confidence_threshold": 0.40,
+      "evidence_requirements": "Single high-confidence visual bounding box or multi-frame persistence >= 2 frames.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+    },
+    "weapon.firearm.rifle": {
+      "parent_category": "weapon",
+      "display_name": "Long Gun / Rifle / Shotgun",
+      "definition": "Long-barrel firearm with shoulder stock or extended barrel.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 4,
+      "default_confidence_threshold": 0.40,
+      "evidence_requirements": "Single visual detection >= threshold.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe", "siren"]
+    },
+    "weapon.edged.knife": {
+      "parent_category": "weapon",
+      "display_name": "Knife / Bladed Weapon",
+      "definition": "Sharp edged or pointed implement with exposed blade held in offensive or drawn posture.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 3,
+      "default_confidence_threshold": 0.45,
+      "evidence_requirements": "Visual bounding box >= threshold.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+    },
+    "weapon.edged.machete": {
+      "parent_category": "weapon",
+      "display_name": "Machete / Sword",
+      "definition": "Large bladed implement (> 25cm blade) visible in perimeter or public zone.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 4,
+      "default_confidence_threshold": 0.40,
+      "evidence_requirements": "Visual bounding box >= threshold.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe", "siren"]
+    },
+    "human_activity.violence.fighting": {
+      "parent_category": "human_activity",
+      "display_name": "Physical Fighting / Altercation",
+      "definition": "Rapid reciprocal striking, grappling, or aggressive physical struggle between multiple individuals.",
+      "modality": "visual",
+      "task": "action_recognition",
+      "severity": 3,
+      "default_confidence_threshold": 0.60,
+      "evidence_requirements": "Temporal correlation across >= 1.5s video window.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+    },
+    "human_activity.distress.fall": {
+      "parent_category": "human_activity",
+      "display_name": "Person Fall / Collapse",
+      "definition": "Sudden descent of a person to ground followed by sustained horizontal stillness.",
+      "modality": "visual",
+      "task": "action_recognition",
+      "severity": 3,
+      "default_confidence_threshold": 0.65,
+      "evidence_requirements": "Rapid downward displacement followed by non-upright posture >= 3s.",
+      "threat_tier": 1,
+      "allowed_actions": ["cloud_alert", "telegram_alert"]
+    },
+    "animal.wildlife.general": {
+      "parent_category": "animal",
+      "display_name": "General Animal Detection",
+      "definition": "Presence of non-human fauna in monitored environment (mammal, bird, livestock).",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 1,
+      "default_confidence_threshold": 0.35,
+      "evidence_requirements": "Visual bounding box. Defaults to passive logging unless proximity rules trigger.",
+      "threat_tier": 0,
+      "allowed_actions": ["log_only"]
+    },
+    "animal.wildlife.predator": {
+      "parent_category": "animal",
+      "display_name": "Dangerous Wildlife / Predator",
+      "definition": "Potentially hazardous wildlife (bear, big cat, boar) near human activity perimeter.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 2,
+      "default_confidence_threshold": 0.50,
+      "evidence_requirements": "Visual detection with verified species label.",
+      "threat_tier": 1,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "soft_deterrence"]
+    },
+    "hazard.fire.flame": {
+      "parent_category": "hazard",
+      "display_name": "Active Flame / Fire",
+      "definition": "Visible open combustion or flickering flame in uncontained area.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 4,
+      "default_confidence_threshold": 0.55,
+      "evidence_requirements": "Sustained flame detection across >= 2 consecutive frames.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "siren", "strobe"]
+    },
+    "hazard.fire.smoke": {
+      "parent_category": "hazard",
+      "display_name": "Smoke Plume",
+      "definition": "Dense rising or accumulating smoke plume obscuring background.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 3,
+      "default_confidence_threshold": 0.50,
+      "evidence_requirements": "Volumetric particulate detection over temporal window.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert"]
+    },
+    "intrusion.perimeter.breach": {
+      "parent_category": "intrusion",
+      "display_name": "Perimeter Breach",
+      "definition": "Physical crossing of defined virtual tripwire or boundary line by person or vehicle.",
+      "modality": "visual",
+      "task": "zone_detection",
+      "severity": 2,
+      "default_confidence_threshold": 0.50,
+      "evidence_requirements": "Centroid vector trajectory crossing polygon boundary.",
+      "threat_tier": 1,
+      "allowed_actions": ["cloud_alert", "telegram_alert"]
+    },
+    "audio.threat.gunshot": {
+      "parent_category": "audio",
+      "display_name": "Gunshot Acoustic Signature",
+      "definition": "Impulsive acoustic shockwave with rapid rise time (< 5ms) and reverberant decay.",
+      "modality": "acoustic",
+      "task": "audio_classification",
+      "severity": 4,
+      "default_confidence_threshold": 0.50,
+      "evidence_requirements": "Spectral peak and acoustic classifier output matching firearm profile.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "visual_cue"]
+    },
+    "audio.threat.scream": {
+      "parent_category": "audio",
+      "display_name": "Human Scream / Vocal Distress",
+      "definition": "High-intensity vocalization in 1-4 kHz formant frequency range characteristic of distress.",
+      "modality": "acoustic",
+      "task": "audio_classification",
+      "severity": 3,
+      "default_confidence_threshold": 0.55,
+      "evidence_requirements": "Acoustic classifier score >= threshold over >= 400ms duration.",
+      "threat_tier": 2,
+      "allowed_actions": ["cloud_alert", "telegram_alert", "visual_cue"]
+    },
+    "audio.threat.glass_break": {
+      "parent_category": "audio",
+      "display_name": "Glass Breakage",
+      "definition": "High-frequency shatter and impact noise in 3-10 kHz range.",
+      "modality": "acoustic",
+      "task": "audio_classification",
+      "severity": 2,
+      "default_confidence_threshold": 0.50,
+      "evidence_requirements": "Acoustic classifier output matching glass shatter profile.",
+      "threat_tier": 1,
+      "allowed_actions": ["cloud_alert", "telegram_alert"]
+    },
+    "audio.threat.alarm": {
+      "parent_category": "audio",
+      "display_name": "Siren / Smoke / Industrial Alarm",
+      "definition": "Periodic or continuous tonal alarm sound (e.g., smoke detector, car alarm, siren).",
+      "modality": "acoustic",
+      "task": "audio_classification",
+      "severity": 2,
+      "default_confidence_threshold": 0.60,
+      "evidence_requirements": "Repeated tonal harmonic peak matching alarm signatures.",
+      "threat_tier": 1,
+      "allowed_actions": ["cloud_alert", "telegram_alert"]
+    }
+  }
+}
