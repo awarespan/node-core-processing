@@ -198,6 +198,9 @@ class Settings:
     offline_queue_path: str = field(
         default_factory=lambda: _get_str("OFFLINE_QUEUE_PATH", "/tmp/awarespan_event_queue.db")
     )
+    incident_db_path: str = field(
+        default_factory=lambda: _get_str("INCIDENT_DB_PATH", "/tmp/awarespan_event_queue.db")
+    )
     siren_enabled: bool = field(default_factory=lambda: _get_bool("SIREN_ENABLED", True))
     siren_file: str = field(
         default_factory=lambda: _get_str("SIREN_FILE", str(REPO_ROOT / "Samples" / "siren.wav"))

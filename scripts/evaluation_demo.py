@@ -96,7 +96,8 @@ def run_knife_detection_demo(model_path: str = None):
 
     detector = VisualDetector(model_path=model_to_use, confidence=0.25)
     assessor = ThreatAssessor()
-    incident_queue = IncidentQueue(db_path=settings.incident_db_path)
+    db_path = getattr(settings, "incident_db_path", getattr(settings, "offline_queue_path", "/tmp/awarespan_event_queue.db"))
+    incident_queue = IncidentQueue(db_path=db_path)
 
     # Create synthetic frame with drawn knife-like object or load real test image if available
     import cv2
