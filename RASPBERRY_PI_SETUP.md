@@ -1,6 +1,10 @@
-# Raspberry Pi 5 Setup Guide
+# AWARESPAN — Raspberry Pi 5 Setup Guide
 
-First-time setup guide for the Raspberry Pi 5 edge node in the SIP Prototype system.
+> **Tagline:** Awareness Without Boundaries.  
+> **Official Problem Statement:** An AI-Powered Safety Device.  
+> **Project Contact:** awarespan@bchbenjamin.in  
+
+First-time setup guide for the Raspberry Pi 5 edge node in the AWARESPAN platform.
 
 ---
 

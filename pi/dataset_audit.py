@@ -327,7 +327,7 @@ def run_audit():
     total = all_samples["total"]
     valid = all_samples["valid"]
     with open(summary_path, "w") as f:
-        f.write(f"SIP Dataset Forensic Audit\n")
+        f.write(f"AWARESPAN Dataset Forensic Audit\n")
         f.write(f"Audit ID: {audit_id}\n")
         f.write(f"Generated: {datetime.now().isoformat()}\n")
         f.write(f"Host: {report['hostname']}\n")

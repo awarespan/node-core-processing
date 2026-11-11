@@ -1,6 +1,10 @@
-# Street Safety Prototype: Run Guide
+# AWARESPAN: Edge Node Run Guide
 
-Authoritative start/stop reference for the AI-Powered Street Safety Device Network prototype.
+> **Tagline:** Awareness Without Boundaries.  
+> **Official Problem Statement:** An AI-Powered Safety Device.  
+> **Project Contact:** awarespan@bchbenjamin.in  
+
+Authoritative start/stop reference for the AWARESPAN edge node software and detection pipeline.
 
 ---
 

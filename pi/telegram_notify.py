@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Telegram notification helper for weapon detection training on Raspberry Pi 5."""
+"""
+Telegram notification helper for AWARESPAN edge node training on Raspberry Pi 5.
+Project: AWARESPAN
+Tagline: Awareness Without Boundaries.
+Official problem statement: An AI-Powered Safety Device.
+"""
 
 import os
 import csv
@@ -12,11 +17,27 @@ from datetime import datetime
 
 import dotenv
 
-dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), "edge-ai", ".env"))
+def find_canonical_env():
+    """Locate canonical root .env with explicit repository-root resolution."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(script_dir, "..", ".env"),
+        os.path.join(script_dir, ".env"),
+        os.path.join(os.path.expanduser("~"), "edge-ai", ".env"),
+        os.path.join(os.path.expanduser("~"), "SIP", "node-backend", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+_env_path = find_canonical_env()
+if _env_path:
+    dotenv.load_dotenv(_env_path)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PRIMARY_CHAT_ID = os.getenv("PRIMARY_CHAT_ID")
-ALLOWED_CHAT_IDS = os.getenv("ALLOWED_CHAT_IDS", PRIMARY_CHAT_ID or "").split(",")
+ALLOWED_CHAT_IDS = [c.strip() for c in os.getenv("ALLOWED_CHAT_IDS", PRIMARY_CHAT_ID or "").split(",") if c.strip()]
 RESULTS_CSV = os.path.expanduser("~/runs/detect/train/results.csv")
 
 
@@ -46,7 +67,10 @@ def send_telegram(message: str, chat_id: str = None):
             with urllib.request.urlopen(req, timeout=15) as resp:
                 results.append(json.loads(resp.read()))
         except Exception as e:
-            print(f"Telegram send failed for {target}: {e}", file=sys.stderr)
+            err_msg = str(e)
+            if BOT_TOKEN and BOT_TOKEN in err_msg:
+                err_msg = err_msg.replace(BOT_TOKEN, "[REDACTED_TOKEN]")
+            print(f"Telegram send failed: {err_msg}", file=sys.stderr)
             
     return results[0] if len(results) == 1 else results
 
@@ -219,7 +243,7 @@ def format_progress_message():
         ip_lines += f"  🌐 <b>IPv6:</b> {ips['ipv6']}\n"
 
     msg = (
-        f"📊 <b>Training Progress Update</b>\n"
+        f"📊 <b>AWARESPAN Training Progress Update</b>\n"
         f"🕐 {now}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"{sys_stats}"
@@ -259,7 +283,7 @@ def send_event(event_type: str, details: str = ""):
     }
     icon = icons.get(event_type, "ℹ️")
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    msg = f"{icon} <b>{event_type.upper()}</b> — {now}\n{details}"
+    msg = f"{icon} <b>AWARESPAN {event_type.upper()}</b> — {now}\n{details}"
     send_telegram(msg)
 
 
@@ -270,15 +294,15 @@ if __name__ == "__main__":
             msg = format_progress_message()
             send_telegram(msg)
         elif cmd == "start":
-            send_event("start", "Training is starting on Raspberry Pi 5...")
+            send_event("start", "AWARESPAN edge training is starting on Raspberry Pi 5...")
         elif cmd == "complete":
             msg = format_progress_message()
-            send_event("complete", f"Training finished!\n\n{msg}")
+            send_event("complete", f"AWARESPAN training finished!\n\n{msg}")
         elif cmd == "crash":
             tb = sys.argv[2] if len(sys.argv) > 2 else "Unknown error"
-            send_event("crash", f"Training crashed!\n<pre>{tb[:500]}</pre>")
+            send_event("crash", f"AWARESPAN training crashed!\n<pre>{tb[:500]}</pre>")
         elif cmd == "test":
-            send_telegram("✅ Telegram bot is working! Connected to Raspberry Pi 5.")
+            send_telegram("✅ AWARESPAN Telegram bot is working! Connected to Raspberry Pi 5.")
         else:
             send_telegram(f"ℹ️ {cmd}: {' '.join(sys.argv[2:])}")
     else:

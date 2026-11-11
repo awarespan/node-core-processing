@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-Interactive Telegram Bot for Raspberry Pi 5.
-- Responds to text messages with training status (rate-limited).
+Interactive Telegram Bot for AWARESPAN edge node on Raspberry Pi 5.
+Project: AWARESPAN
+Tagline: Awareness Without Boundaries.
+Official problem statement: An AI-Powered Safety Device.
+Contact: awarespan@bchbenjamin.in
+
+- Responds to /start, /help, /status with system & training status.
 - Responds to image uploads with YOLOv8 inference.
 """
 
@@ -12,17 +17,36 @@ import requests
 from io import BytesIO
 from PIL import Image
 
-HOME = os.path.expanduser("~")
-sys.path.insert(0, os.path.join(HOME, "edge-ai"))
-import telegram_notify
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 
 import dotenv
-dotenv.load_dotenv(os.path.join(HOME, "edge-ai", ".env"))
+
+def find_canonical_env():
+    """Locate canonical root .env with explicit repository-root resolution."""
+    candidates = [
+        os.path.join(SCRIPT_DIR, "..", ".env"),
+        os.path.join(SCRIPT_DIR, ".env"),
+        os.path.join(os.path.expanduser("~"), "edge-ai", ".env"),
+        os.path.join(os.path.expanduser("~"), "SIP", "node-backend", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+_env_path = find_canonical_env()
+if _env_path:
+    dotenv.load_dotenv(_env_path)
+
+import telegram_notify
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ALLOWED_CHAT_IDS = os.getenv("ALLOWED_CHAT_IDS", "").split(",")
+ALLOWED_CHAT_IDS = [c.strip() for c in os.getenv("ALLOWED_CHAT_IDS", "").split(",") if c.strip()]
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+HOME = os.path.expanduser("~")
 BOT_CACHE = os.path.join(HOME, "edge-ai", "bot_cache")
 os.makedirs(BOT_CACHE, exist_ok=True)
 
@@ -65,6 +89,24 @@ def handle_text(text, chat_id):
     if str(chat_id) not in ALLOWED_CHAT_IDS:
         return  # Ignore messages from unauthorized users
         
+    cmd = (text or "").strip().lower()
+
+    if cmd in ["/start", "/help"]:
+        help_msg = (
+            "🛡️ <b>AWARESPAN Edge Node Bot</b>\n"
+            "<i>Awareness Without Boundaries.</i>\n"
+            "<b>Official Problem Statement:</b> An AI-Powered Safety Device.\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "<b>Available Commands:</b>\n"
+            "• /status — View training and system metrics\n"
+            "• /help — Show this information\n"
+            "• <i>Send any photo</i> — Trigger YOLO weapon inference on image\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "Contact: <code>awarespan@bchbenjamin.in</code>"
+        )
+        telegram_notify.send_telegram(help_msg, chat_id=str(chat_id))
+        return
+
     now = time.time()
     if now - LAST_TEXT_TIME < TEXT_COOLDOWN:
         print(f"Ignoring text message from {chat_id}: rate limited")
@@ -118,11 +160,11 @@ def handle_photo(photo_list, chat_id):
         boxes = res.boxes
         num_detections = len(boxes)
         
-        caption = f"🔍 <b>Detection Results:</b>\nFound {num_detections} object(s)."
+        caption = f"🔍 <b>AWARESPAN Detection Results:</b>\nFound {num_detections} object(s)."
         
     except Exception as e:
         print(f"Inference error: {e}")
-        caption = f"⚠️ Inference failed: {e}"
+        caption = f"⚠️ AWARESPAN Inference failed: {e}"
         # Fallback to original image if plotting fails
         import shutil
         shutil.copy(in_path, out_path)
@@ -173,7 +215,10 @@ def poll():
             time.sleep(1)
             
         except Exception as e:
-            print(f"Polling error: {e}")
+            err_msg = str(e)
+            if BOT_TOKEN and BOT_TOKEN in err_msg:
+                err_msg = err_msg.replace(BOT_TOKEN, "[REDACTED_TOKEN]")
+            print(f"Polling error: {err_msg}")
             time.sleep(5)
 
 

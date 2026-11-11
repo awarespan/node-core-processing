@@ -1,5 +1,10 @@
 #!/bin/bash
-# ─── SIP Pi Startup Script ────────────────────────────────────────────────────
+# ─── AWARESPAN Pi Startup Script ─────────────────────────────────────────────
+# Project: AWARESPAN
+# Tagline: Awareness Without Boundaries.
+# Official problem statement: An AI-Powered Safety Device.
+# Contact: awarespan@bchbenjamin.in
+#
 # Run on boot (via cron @reboot or systemd). Handles:
 # 1. Cloudflare Tunnel for stable public URL (no static IP needed)
 # 2. MQTT client init
@@ -9,6 +14,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="${LOG_DIR:-$HOME/edge-ai/logs}"
 TUNNEL_LOG="$LOG_DIR/tunnel.log"
 EDGE_LOG="$LOG_DIR/edge.log"
@@ -17,14 +23,25 @@ QUEUE_LOG="$LOG_DIR/queue.log"
 mkdir -p "$LOG_DIR"
 cd "$SCRIPT_DIR"
 
-echo "[$(date)] SIP Pi starting up..."
+echo "[$(date)] AWARESPAN Pi starting up..."
 
-# ─── Load environment ─────────────────────────────────────────────────────────
-if [ -f "$HOME/edge-ai/.env" ]; then
-    export $(grep -v '^#' "$HOME/edge-ai/.env" | xargs)
-    echo "[$(date)] Loaded .env"
+# ─── Load environment (canonical root .env with explicit resolution) ─────────
+ENV_FILE=""
+if [ -f "$REPO_ROOT/.env" ]; then
+    ENV_FILE="$REPO_ROOT/.env"
+elif [ -f "$HOME/edge-ai/.env" ]; then
+    ENV_FILE="$HOME/edge-ai/.env"
+elif [ -f "$SCRIPT_DIR/.env" ]; then
+    ENV_FILE="$SCRIPT_DIR/.env"
+fi
+
+if [ -n "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+    echo "[$(date)] Loaded .env from $ENV_FILE"
 else
-    echo "[$(date)] WARNING: $HOME/edge-ai/.env not found — using defaults"
+    echo "[$(date)] WARNING: Canonical .env not found — using defaults"
 fi
 
 # ─── 1. Cloudflare Tunnel ─────────────────────────────────────────────────────
@@ -77,7 +94,7 @@ if ! kill -0 $EDGE_PID 2>/dev/null; then
     exit 1
 fi
 
-echo "[$(date)] SIP Pi fully started. Dashboard: ws://localhost:${EDGE_PORT:-8766}"
+echo "[$(date)] AWARESPAN Pi fully started. Dashboard: ws://localhost:${EDGE_PORT:-8766}"
 echo "[$(date)] Tunnel URL: check $TUNNEL_LOG"
 
 # ─── 4. Queue replay on startup (process any pending offline incidents) ────────

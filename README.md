@@ -1,16 +1,20 @@
-# AI-Powered Street Safety Device Network
+# AWARESPAN — Node Core Processing
 
-Prototype implementation of the **AI-Powered Street Safety Device Network** (ASIP 24UTAI13), developed at Atria Institute of Technology, Bengaluru.
+> **Tagline:** Awareness Without Boundaries.  
+> **Official Problem Statement:** An AI-Powered Safety Device.  
+> **Project Contact:** awarespan@bchbenjamin.in  
+> **Institution:** Atria Institute of Technology, Bengaluru (ASIP 24UTAI13)
 
-The system connects a Laptop (visual sensor node + browser dashboard) to a Raspberry Pi 5 (Edge Compute Core running YOLOv8 threat detection and two-tier response logic).
+Edge node core processing and training engine for the **AWARESPAN** platform. Connects sensor streams (camera, audio) to the Raspberry Pi 5 Edge Compute Core running YOLOv8 threat detection, two-tier deterrence logic, MQTT cloud sync, and autonomous edge training.
 
 ---
 
-## Current Status (2026-11-05)
+## Current Status
 
-**Backend:** Deployed on Render at `https://api.sip.bchbenjamin.in` — **LIVE & HEALTHY**. Health probes return HTTP 200 OK (`{"status":"UP"}`), and incident endpoints are fully operational. Verify health at:
+**Backend API:** `https://api.awarespan.bchbenjamin.in/`  
+Verify health:
 ```bash
-curl https://api.sip.bchbenjamin.in/health
+curl https://api.awarespan.bchbenjamin.in/health
 ```
 
 **Pi Connectivity:**

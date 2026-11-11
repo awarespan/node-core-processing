@@ -1,5 +1,5 @@
 [Unit]
-Description=SIP Edge AI Server
+Description=AWARESPAN Edge AI Server
 After=network-online.target
 Wants=network-online.target
 

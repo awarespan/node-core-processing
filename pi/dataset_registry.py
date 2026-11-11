@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Dataset registry for SIP Pi.
+Dataset registry for AWARESPAN edge node.
+Project: AWARESPAN
+Tagline: Awareness Without Boundaries.
+Official problem statement: An AI-Powered Safety Device.
+Contact: awarespan@bchbenjamin.in
+
 Persistent JSON registry tracking every dataset's source, status, and training history.
 Atomic updates via temp-file + rename to survive crashes and reboots.
 """
@@ -241,7 +246,7 @@ def print_registry_summary():
     runs = get_runs()
     datasets = reg.get("datasets", {})
 
-    print("\n=== SIP Dataset Registry Summary ===")
+    print("\n=== AWARESPAN Dataset Registry Summary ===")
     print(f"Total datasets: {len(datasets)}")
     print(f"Total training runs: {len(runs)}")
     print(f"Last updated: {reg.get('last_updated', 'never')}\n")

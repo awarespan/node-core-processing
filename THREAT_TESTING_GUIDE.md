@@ -1,6 +1,10 @@
-# Threat Testing & Deterrence Guide
+# AWARESPAN: Threat Testing & Deterrence Guide
 
-How to test and demonstrate the AI-Powered Street Safety Device's detection capabilities.
+> **Tagline:** Awareness Without Boundaries.  
+> **Official Problem Statement:** An AI-Powered Safety Device.  
+> **Project Contact:** awarespan@bchbenjamin.in  
+
+How to test and demonstrate the AWARESPAN edge node threat detection and deterrence capabilities.
 
 ---
 

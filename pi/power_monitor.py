@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-SIP Power Monitor — monitors Raspberry Pi undervoltage and sends Telegram alerts.
+AWARESPAN Power Monitor — monitors Raspberry Pi undervoltage and sends Telegram alerts.
+Project: AWARESPAN
+Tagline: Awareness Without Boundaries.
+Official problem statement: An AI-Powered Safety Device.
+Contact: awarespan@bchbenjamin.in
+
 Independent of training/inference. Runs as a systemd service.
 
 Behavior:
-- Polls ~vcgencmd get_throttled~ once per minute.
+- Polls `vcgencmd get_throttled` once per minute.
 - Tracks current undervoltage state persistently.
 - Sends ONE Telegram alert after >30 minutes of continuous undervoltage.
 - Sends ONE recovery notification after the condition clears.
@@ -20,12 +25,37 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+import dotenv
+
+def find_canonical_env():
+    """Locate canonical root .env with explicit repository-root resolution."""
+    candidates = [
+        os.path.join(SCRIPT_DIR, "..", ".env"),
+        os.path.join(SCRIPT_DIR, ".env"),
+        os.path.join(os.path.expanduser("~"), "edge-ai", ".env"),
+        os.path.join(os.path.expanduser("~"), "SIP", "node-backend", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+_env_path = find_canonical_env()
+if _env_path:
+    dotenv.load_dotenv(_env_path)
+
 HOME = os.path.expanduser("~")
-STATE_FILE = os.path.join(HOME, "edge-ai", "state", "power_monitor.json")
+STATE_DIR = os.path.join(HOME, "edge-ai", "state")
+os.makedirs(STATE_DIR, exist_ok=True)
+STATE_FILE = os.path.join(STATE_DIR, "power_monitor.json")
 ALERT_THRESHOLD_MINUTES = 30
 POLL_INTERVAL_SECONDS = 60
 
-# Add edge-ai to path for telegram_notify
+# Add edge-ai to path for legacy fallback
 sys.path.insert(0, os.path.join(HOME, "edge-ai"))
 
 # ── State management ──────────────────────────────────────────────────────────
@@ -132,7 +162,7 @@ def send_alert(state: dict, start_time: str, duration_minutes: float, raw: str) 
         f"💡 Check: power adapter, cable, and USB connections.\n"
         f"📊 Status raw: <code>{raw}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>Auto-monitor — SIP Power Monitor</i>"
+        f"<i>Auto-monitor — AWARESPAN Power Monitor</i>"
     )
     send_telegram(msg)
 
@@ -145,7 +175,7 @@ def send_recovery(state: dict, last_healthy: str) -> None:
         f"🔋 Undervoltage condition cleared.\n"
         f"🕐 Last healthy: {last_healthy}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>Auto-monitor — SIP Power Monitor</i>"
+        f"<i>Auto-monitor — AWARESPAN Power Monitor</i>"
     )
     send_telegram(msg)
 
@@ -160,7 +190,7 @@ def log(msg: str) -> None:
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def run():
-    log(f"Starting SIP Power Monitor")
+    log(f"Starting AWARESPAN Power Monitor")
     log(f"Poll interval: {POLL_INTERVAL_SECONDS}s, Alert threshold: {ALERT_THRESHOLD_MINUTES}min")
 
     # Handle SIGTERM gracefully

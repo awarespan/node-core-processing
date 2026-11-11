@@ -5,7 +5,14 @@ __pycache__/
 *.pyd
 .venv/
 venv/
+
+# Environment files
 .env
+.env.*
+!.env.example
+pi/.env
+pi/.env.*
+!pi/.env.example
 
 # Node
 node_modules/
@@ -16,12 +23,22 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# OS
+# Logs & caches
+*.log
+logs/
+bot_cache/
+state/
+audit_reports/
+*.db
+*.db-journal
+
+# OS & IDE
 .DS_Store
 Thumbs.db
-
-# .env
-.env
+.idea/
+.vscode/
+.claude/
+.claude.json
 
 # Context
 CONTEXT/

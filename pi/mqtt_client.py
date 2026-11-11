@@ -26,8 +26,25 @@ import dotenv
 
 log = logging.getLogger("mqtt_client")
 
-# Load env from ~/edge-ai/.env (same as telegram_notify.py)
-dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), "edge-ai", ".env"))
+# ─── Canonical environment resolution ────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def find_canonical_env():
+    """Locate canonical root .env with explicit repository-root resolution."""
+    candidates = [
+        os.path.join(SCRIPT_DIR, "..", ".env"),
+        os.path.join(SCRIPT_DIR, ".env"),
+        os.path.join(os.path.expanduser("~"), "edge-ai", ".env"),
+        os.path.join(os.path.expanduser("~"), "SIP", "node-backend", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+_env_path = find_canonical_env()
+if _env_path:
+    dotenv.load_dotenv(_env_path)
 
 
 # ─── Config ────────────────────────────────────────────────────────────────────

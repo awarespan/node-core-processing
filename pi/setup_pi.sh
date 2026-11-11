@@ -28,7 +28,7 @@ $VENV_PYTHON "$EDGE_AI/download_and_merge.py" 2>&1 | tee "$LOG_DIR/dataset.log"
 echo "=== [3/6] Setting up systemd autostart service ==="
 sudo tee /etc/systemd/system/weapon-training.service > /dev/null << 'SERVICEEOF'
 [Unit]
-Description=Weapon Detection YOLOv8 Training
+Description=AWARESPAN YOLOv8 Training
 After=network-online.target
 Wants=network-online.target
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=SIP Power Monitor — undervoltage detection and Telegram alerts
+Description=AWARESPAN Power Monitor — undervoltage detection and Telegram alerts
 After=network-online.target
 Wants=network-online.target
 

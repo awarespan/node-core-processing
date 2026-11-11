@@ -11,7 +11,7 @@ mkdir -p "$EDGE_AI/bot_cache"
 echo "=== [2/3] Setting up systemd service ==="
 sudo tee /etc/systemd/system/weapon-bot.service > /dev/null << 'SERVICEEOF'
 [Unit]
-Description=Weapon Detection Interactive Telegram Bot
+Description=AWARESPAN Interactive Telegram Bot
 After=network-online.target weapon-training.service
 Wants=network-online.target
 

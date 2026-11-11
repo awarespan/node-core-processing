@@ -28,13 +28,20 @@ VENV_PYTHON = os.path.join(HOME, "edge-ai", "pi", ".venv", "bin", "python3")
 UNIFIED_DATASET = os.path.join(HOME, "edge-ai", "unified_weapon_dataset", "data.yaml")
 FALLBACK_DATASET = os.path.join(HOME, "gun-and-knife-detection-1", "data.yaml")
 CHECKPOINT = os.path.join(HOME, "runs", "detect", "train", "weights", "last.pt")
-NOTIFY_SCRIPT = os.path.join(HOME, "edge-ai", "telegram_notify.py")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+NOTIFY_SCRIPT = (
+    os.path.join(SCRIPT_DIR, "telegram_notify.py")
+    if os.path.exists(os.path.join(SCRIPT_DIR, "telegram_notify.py"))
+    else os.path.join(HOME, "edge-ai", "telegram_notify.py")
+)
 MANIFEST_PATHS = [
     os.path.join(HOME, "edge-ai", "dataset_registry.json"),
     os.path.join(HOME, "edge-ai", "datasets_manifest.json"),
 ]
 
-# Add edge-ai to path for telegram_notify
+# Add script directory and edge-ai to path
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 sys.path.insert(0, os.path.join(HOME, "edge-ai"))
 
 

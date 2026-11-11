@@ -28,8 +28,25 @@ import requests
 
 log = logging.getLogger("backend_sync")
 
-# Load env from ~/edge-ai/.env
-dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), "edge-ai", ".env"))
+# ─── Canonical environment resolution ────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def find_canonical_env():
+    """Locate canonical root .env with explicit repository-root resolution."""
+    candidates = [
+        os.path.join(SCRIPT_DIR, "..", ".env"),
+        os.path.join(SCRIPT_DIR, ".env"),
+        os.path.join(os.path.expanduser("~"), "edge-ai", ".env"),
+        os.path.join(os.path.expanduser("~"), "SIP", "node-backend", ".env"),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+_env_path = find_canonical_env()
+if _env_path:
+    dotenv.load_dotenv(_env_path)
 
 NODE_ID = os.getenv("PI_NODE_ID", "sip-pi-001")
 DEVICE_SECRET = os.getenv("PI_DEVICE_SECRET", "changeme")

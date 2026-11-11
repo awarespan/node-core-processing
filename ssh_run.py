@@ -1,6 +1,13 @@
+import os
 import sys
 import paramiko
 from paramiko import SSHClient, AutoAddPolicy
+import dotenv
+
+# Load operator environment if present
+OPERATOR_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.operator")
+if os.path.exists(OPERATOR_ENV):
+    dotenv.load_dotenv(OPERATOR_ENV)
 
 def run_ssh(host, user, pwd, command):
     client = SSHClient()
@@ -29,5 +36,13 @@ if __name__ == "__main__":
         print("Provide a command")
         sys.exit(1)
     
+    host = os.getenv("PI_SSH_HOST", os.getenv("IP_ADDRESS", "192.168.0.125"))
+    user = os.getenv("PI_SSH_USER", os.getenv("USERNAME", "benjamin"))
+    pwd = os.getenv("PI_SSH_PASS", os.getenv("PASSWORD"))
+    
+    if not pwd:
+        print("Error: PI_SSH_PASS or PASSWORD environment variable must be set", file=sys.stderr)
+        sys.exit(1)
+        
     cmd = " ".join(sys.argv[1:])
-    run_ssh('192.168.0.125', 'benjamin', '3318', cmd)
+    run_ssh(host, user, pwd, cmd)

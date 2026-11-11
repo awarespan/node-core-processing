@@ -1,6 +1,10 @@
-# Raspberry Pi Scripts
+# AWARESPAN — Raspberry Pi Edge Node Software
 
-Reference guide for all scripts on the Raspberry Pi 5 Edge Compute Core. All scripts live in `node-backend/pi/` and are deployed to the Pi at `192.168.0.125` (WiFi) or `10.42.0.1` (USB gadget).
+> **Tagline:** Awareness Without Boundaries.  
+> **Official Problem Statement:** An AI-Powered Safety Device.  
+> **Project Contact:** awarespan@bchbenjamin.in  
+
+Reference guide for all software and scripts on the AWARESPAN Raspberry Pi 5 Edge Compute Core. All edge scripts live in `pi/` and are executed on the Raspberry Pi at `192.168.0.125` (WiFi) or `10.42.0.1` (USB gadget).
 
 ## Pi Connectivity
 
@@ -9,7 +13,7 @@ Reference guide for all scripts on the Raspberry Pi 5 Edge Compute Core. All scr
 | WiFi (wlan0) | `192.168.0.125` | Normal operation |
 | USB gadget (usb0) | `10.42.0.1/24` | Recovery / no-network scenarios |
 
-Credentials: <SSH_USERNAME> / <SSH_PASSWORD>
+SSH access is configured via SSH key or environment credentials. Never commit credentials to Git.
 
 ```bash
 # SSH onto Pi via WiFi
