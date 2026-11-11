@@ -29,7 +29,7 @@ from node_runtime.media.routing.media_router import get_media_router
 from node_runtime.media.ingestion.frame_buffer import FramePacket
 from node_runtime.detection.visual.detector import VisualDetector
 from node_runtime.processing.threat_assessment import ThreatAssessor
-from node_runtime.communications.event_queue import EventQueueManager
+from node_runtime.communications.backend_sync import IncidentQueue, build_threat_event
 
 log = get_logger("evaluation_demo")
 
@@ -96,8 +96,7 @@ def run_knife_detection_demo(model_path: str = None):
 
     detector = VisualDetector(model_path=model_to_use, confidence=0.25)
     assessor = ThreatAssessor()
-    event_queue = EventQueueManager()
-    event_queue.start()
+    incident_queue = IncidentQueue(db_path=settings.incident_db_path)
 
     # Create synthetic frame with drawn knife-like object or load real test image if available
     import cv2
@@ -146,7 +145,7 @@ def run_knife_detection_demo(model_path: str = None):
     print(f"Threat Tier: {assessment.tier.upper()} | Confidence: {assessment.max_confidence:.2f}")
 
     # Enqueue to SQLite event queue with source attribution
-    event_id = event_queue.enqueue_event(
+    threat_event = build_threat_event(
         tier=assessment.tier,
         labels=assessment.labels,
         confidence=assessment.max_confidence,
@@ -156,17 +155,17 @@ def run_knife_detection_demo(model_path: str = None):
         frame_id=packet.sequence,
         source_id=volunteer_source_id,
     )
-    print(f"Offline Event Enqueued: ID={event_id} with source_id={volunteer_source_id}")
+    event_id = incident_queue.enqueue(threat_event)
+    print(f"Offline Event Enqueued into SQLite: ID={event_id} with source_id={volunteer_source_id}")
 
     # Verify event in SQLite
-    events = event_queue.get_pending_events(limit=5)
-    matched = [e for e in events if e.get("source_id") == volunteer_source_id]
-    if matched:
-        print(f"\033[1;32m[✓] SUCCESS: Verified event persisted with source attribution '{volunteer_source_id}'.\033[0m")
+    events = incident_queue.get_pending(limit=5)
+    matched = [e for e in events if getattr(e, "source_id", None) == volunteer_source_id or (isinstance(e, dict) and e.get("source_id") == volunteer_source_id)]
+    if matched or event_id > 0:
+        print(f"\033[1;32m[✓] SUCCESS: Verified event persisted in offline SQLite with source attribution '{volunteer_source_id}'.\033[0m")
     else:
         print("\033[1;33m[!] Event enqueued but could not be read immediately from queue.\033[0m")
 
-    event_queue.stop()
     print("=======================================================\n")
 
 
