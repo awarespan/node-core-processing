@@ -45,12 +45,20 @@ class AudioThreatAdapter(ThreatModelAdapter):
         self.confidence_threshold = float(self.config.get("confidence_threshold", 0.50))
         self.artifact_path = artifact_path
 
-        # If artifact exists (e.g. yamnet.h5), attempt to load with tensorflow/keras or fallback
+        # If artifact exists (e.g. yamnet.h5), attempt to load with keras/tensorflow or fallback
         if os.path.isfile(artifact_path):
             try:
                 if artifact_path.endswith(".h5"):
-                    import tensorflow as tf
-                    self.model = tf.keras.models.load_model(artifact_path, compile=False)
+                    try:
+                        import keras
+                        self.model = keras.models.load_model(artifact_path, compile=False)
+                    except Exception:
+                        try:
+                            import tf_keras as keras
+                            self.model = keras.models.load_model(artifact_path, compile=False)
+                        except Exception:
+                            import tensorflow as tf
+                            self.model = getattr(tf, "keras", tf).models.load_model(artifact_path, compile=False)
                     log.info("Loaded Keras acoustic model from %s", artifact_path)
             except Exception as exc:
                 log.warning("Could not load Keras model (%s); falling back to DSP acoustic analyzer: %s", artifact_path, exc)
