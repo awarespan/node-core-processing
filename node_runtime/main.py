@@ -311,7 +311,9 @@ async def run_server(args: argparse.Namespace) -> None:
     if enable_gateway:
         v_host = getattr(args, "volunteer_host", None) or settings.volunteer_gateway_host
         v_port = getattr(args, "volunteer_port", None) or settings.volunteer_gateway_port
-        v_tls = getattr(args, "volunteer_tls", settings.volunteer_gateway_tls)
+        v_tls = getattr(args, "volunteer_tls", None)
+        if v_tls is None:
+            v_tls = getattr(settings, "volunteer_gateway_tls", False)
 
         gateway_server = VolunteerGatewayServer(
             host=v_host,

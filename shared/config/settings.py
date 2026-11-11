@@ -213,6 +213,9 @@ class Settings:
     volunteer_gateway_port: int = field(
         default_factory=lambda: _get_int("VOLUNTEER_GATEWAY_PORT", 8443)
     )
+    volunteer_gateway_tls: bool = field(
+        default_factory=lambda: _get_bool("VOLUNTEER_GATEWAY_TLS", False)
+    )
     volunteer_max_sessions: int = field(
         default_factory=lambda: _get_int("VOLUNTEER_MAX_SESSIONS", 5)
     )
