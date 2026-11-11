@@ -44,10 +44,12 @@ def find_canonical_env() -> Optional[Path]:
         return Path(explicit).resolve()
 
     candidates = [
+        Path("/etc/awarespan/node.env"),
+        Path.home() / ".awarespan" / "node.env",
+        Path("/var/lib/awarespan/node.env"),
+        Path.home() / "edge-ai" / ".env",
         REPO_ROOT / ".env",
         Path.cwd() / ".env",
-        Path.home() / "edge-ai" / ".env",
-        Path.home() / "SIP" / "node-backend" / ".env",
     ]
 
     for candidate in candidates:
@@ -110,21 +112,21 @@ class Settings:
     env_file_path: Optional[Path] = CANONICAL_ENV_PATH
 
     # Node Identity
-    node_id: str = field(default_factory=lambda: _get_str("PI_NODE_ID", "sip-pi-001"))
-    device_secret: str = field(default_factory=lambda: _get_str("PI_DEVICE_SECRET", "changeme"))
+    node_id: str = field(default_factory=lambda: _get_str("PI_NODE_ID", ""))
+    device_secret: str = field(default_factory=lambda: _get_str("PI_DEVICE_SECRET", ""))
 
     # Backend REST API
     backend_api_url: str = field(
-        default_factory=lambda: _get_str("BACKEND_API_URL", "https://api.awarespan.bchbenjamin.in/").rstrip("/")
+        default_factory=lambda: _get_str("BACKEND_API_URL", "").rstrip("/")
     )
     backend_api_key: str = field(default_factory=lambda: _get_str("BACKEND_API_KEY", ""))
 
     # MQTT Broker
     mqtt_broker_url: str = field(
-        default_factory=lambda: _get_str("MQTT_BROKER_URL", "tcp://broker.hivemq.com:1883")
+        default_factory=lambda: _get_str("MQTT_BROKER_URL", "")
     )
     mqtt_client_id: str = field(
-        default_factory=lambda: _get_str("MQTT_CLIENT_ID", f"sip-pi-{uuid.getnode():012x}")
+        default_factory=lambda: _get_str("MQTT_CLIENT_ID", f"node-{uuid.getnode():012x}")
     )
     mqtt_username: str = field(default_factory=lambda: _get_str("MQTT_USERNAME", ""))
     mqtt_password: str = field(default_factory=lambda: _get_str("MQTT_PASSWORD", ""))
@@ -168,7 +170,7 @@ class Settings:
         default_factory=lambda: _get_str("ML_DATASET_DIR", str(REPO_ROOT / "datasets"))
     )
     checkpoint_dir: str = field(
-        default_factory=lambda: _get_str("ML_CHECKPOINT_DIR", str(Path.home() / "runs"))
+        default_factory=lambda: _get_str("ML_CHECKPOINT_DIR", str(REPO_ROOT / "runs"))
     )
     default_model: str = field(
         default_factory=lambda: _get_str("ML_DEFAULT_MODEL", "yolov8n_best_weapon.pt")

@@ -13,11 +13,11 @@ Authoritative operational reference for starting, stopping, verifying, and monit
 
 | Component | Default Port / URL | Description |
 |---|---|---|
-| Raspberry Pi IP | Configured in `.env` (`192.168.0.125`) | Edge processing hardware |
+| Raspberry Pi IP | Configured in environment (`PI_IP`) | Edge processing hardware |
 | Node Runtime Stream & Health | `8766` (`/ingest` and `/`) | WebSockets & diagnostic `/health` |
 | Local Dashboard | `http://localhost:3000` | Web observation dashboard |
-| Backend REST API | `https://api.awarespan.bchbenjamin.in/` | Cloud API |
-| Central MQTT Broker | `broker.hivemq.com:1883` | Outbound telemetry & incident broker |
+| Backend REST API | Configured in environment (`BACKEND_API_URL`) | Cloud API |
+| Central MQTT Broker | Configured in environment (`MQTT_BROKER_URL`) | Outbound telemetry & incident broker |
 
 ---
 
@@ -65,7 +65,7 @@ To feed laptop webcam frames to the Raspberry Pi:
 
 ```bash
 # From your laptop
-python3 laptop/stream_client.py --pi-host 192.168.0.125 --port 8766
+python3 laptop/stream_client.py --pi-host <PI_IP> --port 8766
 ```
 
 ---

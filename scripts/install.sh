@@ -62,14 +62,21 @@ echo "Installing runtime dependencies..."
 "${PYTHON_EXEC}" -m pip install --upgrade pip --no-warn-script-location >/dev/null
 "${PYTHON_EXEC}" -m pip install --no-warn-script-location -r "${REPO_ROOT}/requirements/runtime.txt"
 
-# 6. Initialize Canonical .env
-if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+# 6. Setup Configuration Environment (stored OUTSIDE git repository)
+CONFIG_DIR="/etc/awarespan"
+sudo mkdir -p "${CONFIG_DIR}"
+sudo chown "${CURRENT_USER}:${CURRENT_USER}" "${CONFIG_DIR}"
+ENV_TARGET="${CONFIG_DIR}/node.env"
+
+if [[ ! -f "${ENV_TARGET}" ]]; then
     if [[ -f "${CURRENT_HOME}/edge-ai/.env" ]]; then
-        echo "Linking canonical .env from existing edge-ai installation..."
-        cp "${CURRENT_HOME}/edge-ai/.env" "${REPO_ROOT}/.env"
+        echo "Installing environment configuration to ${ENV_TARGET}..."
+        cp "${CURRENT_HOME}/edge-ai/.env" "${ENV_TARGET}"
+        chmod 600 "${ENV_TARGET}"
     elif [[ -f "${REPO_ROOT}/.env.example" ]]; then
-        echo "Creating initial .env from template..."
-        cp "${REPO_ROOT}/.env.example" "${REPO_ROOT}/.env"
+        echo "Creating initial template configuration at ${ENV_TARGET}..."
+        cp "${REPO_ROOT}/.env.example" "${ENV_TARGET}"
+        chmod 600 "${ENV_TARGET}"
     fi
 fi
 

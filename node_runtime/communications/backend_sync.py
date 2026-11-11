@@ -225,6 +225,9 @@ class BackendSync:
 
     def send_incident(self, event: ThreatEvent, model: str = "") -> bool:
         """Transmit incident to backend REST endpoint /api/nodes/{nodeId}/incidents."""
+        if not self.api_url:
+            log.debug("BACKEND_API_URL not configured; skipping REST incident sync.")
+            return False
         url = f"{self.api_url}/api/nodes/{self.node_id}/incidents"
         payload = {
             "nodeId": self.node_id,
@@ -251,6 +254,8 @@ class BackendSync:
 
     def send_heartbeat(self, extra: Optional[Dict[str, Any]] = None) -> bool:
         """Transmit heartbeat to backend REST endpoint /api/nodes/{nodeId}/heartbeat."""
+        if not self.api_url:
+            return False
         url = f"{self.api_url}/api/nodes/{self.node_id}/heartbeat"
         payload = {
             "nodeId": self.node_id,

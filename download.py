@@ -1,10 +1,15 @@
 import os
+import sys
 from roboflow import Roboflow
 import shutil
 
 def main():
     print("Downloading dataset from Roboflow...")
-    rf = Roboflow(api_key='mCMBhfrder6POXLGvIll')
+    api_key = os.getenv("ROBOFLOW_API_KEY", "")
+    if not api_key:
+        print("Error: ROBOFLOW_API_KEY environment variable not set", file=sys.stderr)
+        return
+    rf = Roboflow(api_key=api_key)
     project = rf.workspace('yolov7test-u13vc').project('weapon-detection-m7qso')
     version = project.version(1)
     dataset = version.download('yolov8')

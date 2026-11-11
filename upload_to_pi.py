@@ -27,12 +27,12 @@ def upload_dir(sftp, local_dir, remote_dir):
             upload_dir(sftp, local_path, remote_path)
 
 def main():
-    host = os.getenv("PI_SSH_HOST", os.getenv("IP_ADDRESS", "192.168.0.125"))
-    user = os.getenv("PI_SSH_USER", os.getenv("USERNAME", "benjamin"))
-    pwd = os.getenv("PI_SSH_PASS", os.getenv("PASSWORD"))
+    host = os.getenv("PI_SSH_HOST", os.getenv("IP_ADDRESS", ""))
+    user = os.getenv("PI_SSH_USER", os.getenv("USERNAME", ""))
+    pwd = os.getenv("PI_SSH_PASS", os.getenv("PASSWORD", ""))
     
-    if not pwd:
-        print("Error: PI_SSH_PASS or PASSWORD environment variable must be set", file=sys.stderr)
+    if not host or not user or not pwd:
+        print("Error: PI_SSH_HOST, PI_SSH_USER, and PI_SSH_PASS/PASSWORD environment variables must be set", file=sys.stderr)
         sys.exit(1)
     
     transport = paramiko.Transport((host, 22))

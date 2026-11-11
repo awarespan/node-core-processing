@@ -16,7 +16,7 @@ def test_settings_defaults():
 
 
 def test_credential_sanitizer():
-    raw_token = "7695304603:AAH40-Xw4AbCdEfGhIjKlMnOpQrStUvWxYz"
+    raw_token = "9876543210:AAH40-DummyTestTokenStringForSanitizerCheck123"
     text = f"Connecting to Telegram with token {raw_token} now."
     sanitized = sanitize_text(text)
     assert raw_token not in sanitized
@@ -26,7 +26,7 @@ def test_credential_sanitizer():
 def test_logger_filter():
     logger = logging.getLogger("test_logger")
     cred_filter = CredentialFilter()
-    record = logging.LogRecord("test", logging.INFO, "test.py", 1, "Token 7695304603:AAH40-Xw4AbCdEfGhIjKlMnOpQrStUvWxYz failed", (), None)
+    record = logging.LogRecord("test", logging.INFO, "test.py", 1, "Token 9876543210:AAH40-DummyTestTokenStringForSanitizerCheck123 failed", (), None)
     cred_filter.filter(record)
-    assert "7695304603:" not in record.msg
+    assert "9876543210:" not in record.msg
     assert "[REDACTED_BOT_TOKEN]" in record.msg

@@ -57,8 +57,12 @@ class PiMqttClient:
             log.warning("paho-mqtt is not installed in this environment; running in mock mode.")
             return False
 
+        if not self.broker_url:
+            log.info("MQTT_BROKER_URL not configured; skipping MQTT connection.")
+            return False
+
         parsed = urlparse(self.broker_url if "://" in self.broker_url else f"tcp://{self.broker_url}")
-        host = parsed.hostname or "broker.hivemq.com"
+        host = parsed.hostname or "localhost"
         port = parsed.port or (8883 if parsed.scheme in ("ssl", "tls", "mqtts") or self.use_tls else 1883)
         use_ssl = parsed.scheme in ("ssl", "tls", "mqtts") or self.use_tls
 

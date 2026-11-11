@@ -17,7 +17,7 @@ from typing import Optional, Set
 from shared.config.settings import get_settings
 
 
-# Regular expression to catch Telegram bot tokens: e.g. 7695304603:AAH40-Xw4...
+# Regular expression to catch Telegram bot tokens: e.g. 1234567890:AAH40-Xw4...
 TELEGRAM_TOKEN_REGEX = re.compile(r"\b\d{8,11}:[A-Za-z0-9_-]{35,}\b")
 
 

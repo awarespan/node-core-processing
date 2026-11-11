@@ -36,7 +36,7 @@ Comprehensive guide for provisioning, deploying, and maintaining an AWARESPAN ed
 
 Connect via SSH:
 ```bash
-ssh benjamin@192.168.0.125
+ssh <username>@<pi_ip>
 ```
 
 Clone the canonical repository directly onto the Pi:
@@ -75,11 +75,11 @@ nano .env
 Key configuration parameters:
 ```env
 # Backend REST & Cloud Synchronization
-BACKEND_API_URL=https://api.awarespan.bchbenjamin.in/
+BACKEND_API_URL=https://api.example.com/
 BACKEND_API_KEY=your_backend_api_key
 
 # Node Identity
-PI_NODE_ID=sip-pi-001
+PI_NODE_ID=node-001
 PI_DEVICE_SECRET=your_device_secret
 
 # MQTT Broker (outbound connection)
