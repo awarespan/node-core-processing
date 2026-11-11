@@ -1,0 +1,22 @@
+[Unit]
+Description=SIP Power Monitor — undervoltage detection and Telegram alerts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=benjamin
+WorkingDirectory=/home/benjamin
+ExecStart=/home/benjamin/edge-ai/pi/.venv/bin/python3 /home/benjamin/edge-ai/power_monitor.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/home/benjamin/edge-ai/logs/power_monitor.log
+StandardError=append:/home/benjamin/edge-ai/logs/power_monitor.log
+Environment=HOME=/home/benjamin
+Environment=PATH=/home/benjamin/edge-ai/pi/.venv/bin:/usr/local/bin:/usr/bin:/bin
+
+# Lower priority — should not interfere with training
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

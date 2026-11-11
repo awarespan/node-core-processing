@@ -1,0 +1,25 @@
+[Unit]
+Description=SIP Edge AI Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/edge-ai
+EnvironmentFile=/home/pi/edge-ai/.env
+ExecStartPre=/bin/sleep 5
+ExecStart=/home/pi/edge-ai/start.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/pi/edge-ai/logs/edge-system.log
+StandardError=append:/home/pi/edge-ai/logs/edge-system.log
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/edge-ai/logs /tmp
+
+[Install]
+WantedBy=multi-user.target
