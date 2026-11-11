@@ -23,6 +23,7 @@ KNOWN_SERVICES = {
     "updater": "awarespan-updater.service",
     "updater_timer": "awarespan-updater.timer",
     "training": "awarespan-training.service",
+    "bot": "awarespan-bot.service",
 }
 
 
@@ -145,6 +146,9 @@ class ServiceManager:
             # Node runtime changes
             elif f_norm.startswith("node_runtime/monitoring/power_monitor.py"):
                 affected.add(KNOWN_SERVICES["power_monitor"])
+            elif f_norm.startswith("node_runtime/monitoring/telegram_bot.py") or f_norm.startswith("node_runtime/monitoring/telegram_notify.py"):
+                if self.is_active(KNOWN_SERVICES["bot"]):
+                    affected.add(KNOWN_SERVICES["bot"])
             elif f_norm.startswith("node_runtime/"):
                 affected.add(KNOWN_SERVICES["node"])
 

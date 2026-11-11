@@ -1,0 +1,19 @@
+[Unit]
+Description=AWARESPAN Interactive Telegram Bot
+Documentation=https://github.com/awarespan/node-core-processing
+After=network-online.target awarespan-node.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKDIR%
+ExecStart=%PYTHON% -m node_runtime.monitoring.telegram_bot
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

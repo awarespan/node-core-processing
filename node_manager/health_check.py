@@ -41,14 +41,23 @@ class HealthChecker:
         self.services = ServiceManager()
 
     def check_runtime_endpoint(self, timeout_sec: float = 3.0) -> bool:
-        """Probe the runtime HTTP health endpoint."""
+        """Probe the runtime HTTP/WebSocket health endpoint."""
         url = f"http://127.0.0.1:{self.settings.runtime_port}/health"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "AWARESPAN-HealthCheck/2.0"})
             with urllib.request.urlopen(req, timeout=timeout_sec) as response:
-                return response.status == 200
+                return response.status in (200, 204)
+        except urllib.error.HTTPError as exc:
+            # 426 Upgrade Required confirms the WebSocket server is active and responding
+            return exc.code in (200, 204, 426)
         except Exception:
-            return False
+            # Fallback to TCP socket check
+            import socket
+            try:
+                with socket.create_connection(("127.0.0.1", self.settings.runtime_port), timeout=timeout_sec):
+                    return True
+            except OSError:
+                return False
 
     def check_event_queue(self) -> bool:
         """Check if SQLite offline queue database is accessible and not corrupted."""

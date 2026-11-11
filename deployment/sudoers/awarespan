@@ -1,2 +1,2 @@
 # AWARESPAN Passwordless systemctl permissions for automatic node updates
-%USER% ALL=(ALL) NOPASSWD: /bin/systemctl restart awarespan-node.service, /bin/systemctl restart awarespan-power-monitor.service, /bin/systemctl restart awarespan-updater.service, /bin/systemctl daemon-reload
+%USER% ALL=(ALL) NOPASSWD: /bin/systemctl restart awarespan-node.service, /bin/systemctl restart awarespan-power-monitor.service, /bin/systemctl restart awarespan-bot.service, /bin/systemctl restart awarespan-updater.service, /bin/systemctl daemon-reload

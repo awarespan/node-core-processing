@@ -43,3 +43,12 @@ def test_service_manager_affected_services():
     # Changes in docs should not restart services
     aff = sm.determine_affected_services(["README.md", "docs/index.html"])
     assert len(aff) == 0
+
+
+def test_health_checker_runtime_endpoint():
+    from node_manager.health_check import HealthChecker
+    hc = HealthChecker()
+    # If not running on this dummy port, check returns False gracefully without crash
+    res = hc.check_runtime_endpoint(timeout_sec=0.1)
+    assert isinstance(res, bool)
+    assert hc.check_event_queue() is True

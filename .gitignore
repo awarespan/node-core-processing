@@ -42,5 +42,11 @@ Thumbs.db
 .claude/
 .claude.json
 
+# Legacy monorepo artifacts
+android-frontend/
+database/
+node-backend/
+*.jar
+
 # Context
 CONTEXT/

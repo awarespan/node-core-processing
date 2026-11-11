@@ -21,6 +21,7 @@ echo "============================================================"
 SERVICES=(
     "awarespan-node.service"
     "awarespan-power-monitor.service"
+    "awarespan-bot.service"
     "awarespan-updater.service"
     "awarespan-updater.timer"
     "awarespan-training.service"
