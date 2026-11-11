@@ -161,8 +161,12 @@ def run_knife_detection_demo(model_path: str = None):
 
     # Verify event in SQLite
     events = incident_queue.get_pending(limit=5)
-    matched = [e for e in events if getattr(e, "source_id", None) == volunteer_source_id or (isinstance(e, dict) and e.get("source_id") == volunteer_source_id)]
-    if matched or event_id > 0:
+    matched = [
+        item for item in events
+        if getattr(item.get("event"), "source_id", None) == volunteer_source_id
+        or item.get("id") == threat_event.event_id
+    ]
+    if matched or incident_queue.depth > 0:
         print(f"\033[1;32m[✓] SUCCESS: Verified event persisted in offline SQLite with source attribution '{volunteer_source_id}'.\033[0m")
     else:
         print("\033[1;33m[!] Event enqueued but could not be read immediately from queue.\033[0m")

@@ -137,6 +137,7 @@ class IncidentQueue:
                             latency_ms=data.get("latency_ms", 0),
                             frame_id=data.get("frame_id", 0),
                             model=data.get("model", row["model"]),
+                            source_id=data.get("source_id", "builtin"),
                         )
                         items.append({
                             "id": row["id"],
@@ -149,6 +150,8 @@ class IncidentQueue:
         except Exception as exc:
             log.warning("Failed to dequeue from incident queue: %s", exc)
         return items
+
+    get_pending = dequeue_all
 
     def mark_success(self, event_id: str) -> None:
         """Remove successfully delivered incident from queue."""
