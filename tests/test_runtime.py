@@ -87,3 +87,45 @@ def test_sqlite_incident_queue():
 
         q.mark_success("evt-test-1")
         assert q.depth == 0
+
+
+def test_backend_sync_headers_and_endpoints(monkeypatch):
+    from unittest.mock import MagicMock
+    import requests
+    from node_runtime.communications.backend_sync import BackendSync, build_threat_event
+
+    mock_post = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 201
+    mock_post.return_value = mock_resp
+    monkeypatch.setattr(requests, "post", mock_post)
+
+    sync = BackendSync(api_url="https://api.awarespan.example.com", api_key="test-api-key")
+    assert sync.headers["X-API-Key"] == "test-api-key"
+    assert sync.headers["X-Node-Id"] == sync.node_id
+    assert sync.headers["X-Device-Secret"] == sync.device_secret
+
+    # Test send_heartbeat
+    ok_hb = sync.send_heartbeat({"batteryLevel": 95})
+    assert ok_hb is True
+    hb_call = mock_post.call_args_list[0]
+    assert hb_call[0][0] == f"https://api.awarespan.example.com/api/v1/nodes/{sync.node_id}/heartbeat"
+    hb_payload = hb_call[1]["json"]
+    assert hb_payload["nodeId"] == sync.node_id
+    assert hb_payload["status"] == "ONLINE"
+    assert "T" in hb_payload["timestamp"]  # ISO-8601 string
+    assert hb_payload["batteryLevel"] == 95
+
+    # Test send_incident
+    evt = build_threat_event(tier="tier1", labels=["WEAPON"], confidence=0.92, model="yolov8n")
+    ok_inc = sync.send_incident(evt)
+    assert ok_inc is True
+    inc_call = mock_post.call_args_list[1]
+    assert inc_call[0][0] == "https://api.awarespan.example.com/api/v1/incidents"
+    inc_payload = inc_call[1]["json"]
+    assert inc_payload["incidentId"] == evt.event_id
+    assert inc_payload["nodeId"] == sync.node_id
+    assert inc_payload["threatType"] == "WEAPON"
+    assert inc_payload["threatSeverity"] == "CRITICAL"
+    assert "T" in inc_payload["detectionTime"]  # ISO-8601 string
+

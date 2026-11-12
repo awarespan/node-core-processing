@@ -116,12 +116,11 @@ class EventQueueManager:
         depth = self.queue.depth if self.queue else 0
         extra = {"queueDepth": depth}
 
-        sent = False
-        if self.mqtt and self.mqtt.connected:
-            sent = self.mqtt.publish_heartbeat(extra)
-
-        if not sent and self.backend:
+        if self.backend:
             self.backend.send_heartbeat(extra)
+
+        if self.mqtt and self.mqtt.connected:
+            self.mqtt.publish_heartbeat(extra)
 
     def _replay_offline_queue(self) -> None:
         """Replay queued incidents when network is available."""

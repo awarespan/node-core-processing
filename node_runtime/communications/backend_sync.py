@@ -223,28 +223,43 @@ class BackendSync:
         self.headers = {
             "Content-Type": "application/json",
             "User-Agent": "AWARESPAN-Edge-Node/2.0",
+            "X-Node-Id": self.node_id,
             "X-Device-Secret": self.device_secret,
         }
         if self.api_key:
             self.headers["X-API-Key"] = self.api_key
 
     def send_incident(self, event: ThreatEvent, model: str = "") -> bool:
-        """Transmit incident to backend REST endpoint /api/nodes/{nodeId}/incidents."""
+        """Transmit incident to backend REST endpoint /api/v1/incidents."""
         if not self.api_url:
             log.debug("BACKEND_API_URL not configured; skipping REST incident sync.")
             return False
-        url = f"{self.api_url}/api/nodes/{self.node_id}/incidents"
+        url = f"{self.api_url}/api/v1/incidents"
+        threat_type = event.labels[0].upper() if event.labels else "UNKNOWN"
+        detection_time = datetime.fromtimestamp(event.ts_ms / 1000.0, timezone.utc).isoformat()
+        threat_desc = (
+            f"Detected {', '.join(event.labels)} ({event.max_confidence * 100:.1f}%)"
+            if event.labels
+            else "Threat detected"
+        )
+        threat_severity = (
+            "CRITICAL"
+            if event.tier in ("tier1", "critical")
+            else "HIGH"
+            if event.tier in ("tier2", "high")
+            else "MEDIUM"
+        )
+
         payload = {
+            "incidentId": event.event_id,
+            "idempotencyKey": event.event_id,
             "nodeId": self.node_id,
-            "eventId": event.event_id,
-            "tier": event.tier,
-            "labels": event.labels,
-            "maxConfidence": event.max_confidence,
-            "action": event.action,
-            "latencyMs": event.latency_ms,
-            "frameId": event.frame_id,
-            "model": model or event.model,
-            "timestamp": event.ts_ms,
+            "threatType": threat_type,
+            "threatSeverity": threat_severity,
+            "threatDescription": threat_desc,
+            "confidence": float(event.max_confidence),
+            "detectionTime": detection_time,
+            "tier": 1 if event.tier in ("tier1", "critical") else 2,
         }
         try:
             res = requests.post(url, json=payload, headers=self.headers, timeout=5)
@@ -258,18 +273,24 @@ class BackendSync:
             return False
 
     def send_heartbeat(self, extra: Optional[Dict[str, Any]] = None) -> bool:
-        """Transmit heartbeat to backend REST endpoint /api/nodes/{nodeId}/heartbeat."""
+        """Transmit heartbeat to backend REST endpoint /api/v1/nodes/{nodeId}/heartbeat."""
         if not self.api_url:
             return False
-        url = f"{self.api_url}/api/nodes/{self.node_id}/heartbeat"
+        url = f"{self.api_url}/api/v1/nodes/{self.node_id}/heartbeat"
+        now_iso = datetime.now(timezone.utc).isoformat()
         payload = {
             "nodeId": self.node_id,
             "status": "ONLINE",
-            "timestamp": int(time.time() * 1000),
+            "timestamp": now_iso,
             **(extra or {}),
         }
         try:
             res = requests.post(url, json=payload, headers=self.headers, timeout=4)
-            return res.status_code in (200, 201)
-        except Exception:
+            if res.status_code in (200, 201):
+                log.debug("Heartbeat transmitted successfully for %s", self.node_id)
+                return True
+            log.warning("Heartbeat transmission failed (%d): %s", res.status_code, res.text[:200])
+            return False
+        except Exception as exc:
+            log.debug("Heartbeat transmission exception: %s", exc)
             return False
