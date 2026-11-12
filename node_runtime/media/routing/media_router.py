@@ -89,7 +89,21 @@ class CoreMediaRouter:
         source.camera_active = True
         source.record_frame(frame_id, len(jpeg_bytes))
 
-        return self.frame_ingestion.ingest_raw_frame(source_id, frame_id, source_ts_ms, jpeg_bytes)
+        ok = self.frame_ingestion.ingest_raw_frame(source_id, frame_id, source_ts_ms, jpeg_bytes)
+        if self._frame_handler:
+            packet = FramePacket(
+                source_id=source_id,
+                sequence=frame_id,
+                timestamp_ms=source_ts_ms,
+                payload=jpeg_bytes,
+            )
+            decoded = packet.decode()
+            if decoded is not None:
+                try:
+                    self._frame_handler(packet, decoded)
+                except Exception as exc:
+                    log.warning("Direct frame dispatch error for %s: %s", source_id, exc)
+        return ok
 
     def ingest_audio(
         self,
@@ -129,7 +143,12 @@ class CoreMediaRouter:
             if frame is None:
                 continue
 
-            if self._inference_callback:
+            if self._frame_handler:
+                try:
+                    self._frame_handler(packet, frame)
+                except Exception as exc:
+                    log.warning("Frame handler dispatch error for source %s: %s", packet.source_id, exc)
+            elif self._inference_callback:
                 try:
                     self._inference_callback(
                         frame,

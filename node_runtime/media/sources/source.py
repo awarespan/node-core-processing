@@ -59,6 +59,7 @@ class MediaSource:
         transport: str = "websocket_binary",
         camera_active: bool = False,
         mic_active: bool = False,
+        capabilities: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
         self.source_id = source_id
@@ -74,7 +75,7 @@ class MediaSource:
         self.transport = transport
         self.camera_active = camera_active
         self.mic_active = mic_active
-        self.capabilities: Dict[str, Any] = {}
+        self.capabilities: Dict[str, Any] = capabilities or {}
         self.metadata = metadata or {}
         self.metrics: Dict[str, Any] = {
             "frames_received": 0,

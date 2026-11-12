@@ -109,10 +109,20 @@ class RuntimeCore:
                     data = json.loads(message)
                 except json.JSONDecodeError:
                     continue
-                if data.get("type") == "frame":
+                mtype = data.get("type")
+                if mtype == "frame":
                     if "source_id" not in data:
                         data["source_id"] = "ws-ingest"
                     self._enqueue_frame(data)
+                elif mtype == "ping":
+                    ts = data.get("ts_ms", int(time.time() * 1000))
+                    await websocket.send(json.dumps({"type": "pong", "ts_ms": ts}))
+                elif mtype == "volunteer_handshake":
+                    mode = data.get("mode", "camera")
+                    if mode in ("camera", "both"):
+                        await websocket.send(json.dumps({"type": "ack", "source": "camera"}))
+                    if mode in ("microphone", "both"):
+                        await websocket.send(json.dumps({"type": "ack", "source": "microphone"}))
         except Exception as exc:
             log.debug("Ingestion connection ended: %s", exc)
         finally:

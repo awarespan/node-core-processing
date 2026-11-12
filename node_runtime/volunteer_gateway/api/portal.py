@@ -322,6 +322,8 @@ class VolunteerPortalAPI:
             "success": True,
             "message": "Authenticated successfully",
             "pairing_token": token,
+            "session_token": token,
+            "token": token,
             "granted_capabilities": list(caps),
             "expires_in": int(self.session_mgr.pairing_timeout),
             "node_id": self.settings.node_id,
