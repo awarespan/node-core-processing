@@ -192,6 +192,62 @@ class VolunteerSessionManager:
         log.info("Redeemed pairing token; established session %s for source %s", session_id, source_id)
         return True, session, "Session established"
 
+    def create_direct_session(
+        self,
+        client_ip: str,
+        capabilities: Union[Set[str], List[str], str],
+        device_info: str = "",
+    ) -> Tuple[bool, Optional[VolunteerSession], str]:
+        """Directly create an active session after operator TOTP verification."""
+        if isinstance(capabilities, str):
+            if capabilities == "both":
+                caps = {"camera", "microphone"}
+            else:
+                caps = {capabilities}
+        else:
+            caps = set(capabilities)
+
+        if len(self._active_sessions) >= self.max_sessions:
+            return False, None, f"Maximum concurrent sessions ({self.max_sessions}) reached."
+
+        current_cameras = sum(1 for s in self._active_sessions.values() if "camera" in s.granted_capabilities and s.is_active)
+        current_mics = sum(1 for s in self._active_sessions.values() if "microphone" in s.granted_capabilities and s.is_active)
+
+        if "camera" in caps and current_cameras >= self.max_cameras:
+            return False, None, f"Max concurrent cameras ({self.max_cameras}) reached."
+        if "microphone" in caps and current_mics >= self.max_microphones:
+            return False, None, f"Max concurrent microphones ({self.max_microphones}) reached."
+
+        now = time.time()
+        session_id = f"volsess-{secrets.token_hex(6)}"
+        source_id = f"vol-{client_ip.replace('.', '-')}-{secrets.token_hex(3)}"
+
+        session = VolunteerSession(
+            session_id=session_id,
+            source_id=source_id,
+            client_ip=client_ip,
+            granted_capabilities=caps,
+            created_at=now,
+            last_seen_at=now,
+            expires_at=now + self.session_timeout,
+            device_info=device_info,
+            is_active=True,
+        )
+
+        self._active_sessions[session_id] = session
+        log.info("Directly established volunteer session %s for source %s", session_id, source_id)
+        return True, session, "Session established"
+
+    def record_activity(self, session_id: str) -> None:
+        """Update last seen timestamp for active session."""
+        sess = self._active_sessions.get(session_id)
+        if sess:
+            sess.last_seen_at = time.time()
+
+    def revoke_session(self, session_id: str, reason: str = "") -> bool:
+        """Alias for terminate_session."""
+        return self.terminate_session(session_id)
+
     def get_session(self, session_id: str) -> Optional[VolunteerSession]:
         return self._active_sessions.get(session_id)
 

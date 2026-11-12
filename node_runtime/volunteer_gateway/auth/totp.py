@@ -20,22 +20,44 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+from shared.config.settings import get_settings
 from shared.logging.logger import get_logger
 
 log = get_logger("volunteer_gateway.auth.totp")
 
 
 def _generate_secret(length: int = 20) -> str:
-    """Generate a random base32 TOTP secret."""
+    """Generate a random base32 TOTP secret (RFC 6238 recommends 160 bits / 20 bytes)."""
     raw = secrets.token_bytes(length)
-    return base64.b32encode(raw).decode("utf-8").replace("=", "")
+    return base64.b32encode(raw).decode("utf-8").replace("=", "").upper()
+
+
+def _is_valid_base32(s: str) -> bool:
+    """Check if string is a valid Base32 encoded secret."""
+    try:
+        cleaned = s.strip().replace(" ", "").upper()
+        if len(cleaned) < 16 or len(cleaned) % 8 in (1, 3, 6):
+            return False
+        padding = (8 - len(cleaned) % 8) % 8
+        base64.b32decode(cleaned + "=" * padding)
+        return True
+    except Exception:
+        return False
 
 
 def _get_hotp(secret_base32: str, counter: int) -> str:
     """Compute HMAC-based One-Time Password for counter."""
-    # Ensure proper base32 padding
-    padding = (8 - len(secret_base32) % 8) % 8
-    key = base64.b32decode(secret_base32.upper() + "=" * padding)
+    cleaned = secret_base32.strip().replace(" ", "").upper()
+    padding = (8 - len(cleaned) % 8) % 8
+    try:
+        key = base64.b32decode(cleaned + "=" * padding)
+    except Exception:
+        # Safely normalize if malformed
+        while len(cleaned) > 16 and len(cleaned) % 8 in (1, 3, 6):
+            cleaned = cleaned[:-1]
+        padding = (8 - len(cleaned) % 8) % 8
+        key = base64.b32decode(cleaned + "=" * padding)
+
     msg = struct.pack(">Q", counter)
     h = hmac.new(key, msg, hashlib.sha1).digest()
     offset = h[-1] & 0x0F
@@ -78,6 +100,7 @@ class TOTPAuthManager:
 
     def __init__(
         self,
+        secret: Optional[str] = None,
         secret_file: Optional[Path] = None,
         max_attempts: int = 5,
         lockout_duration_sec: float = 300.0,
@@ -85,10 +108,20 @@ class TOTPAuthManager:
         max_failed_attempts: Optional[int] = None,
         lockout_window_sec: Optional[float] = None,
     ):
-        self.secret_file = secret_file or Path("state") / "totp_secret.json"
+        settings = get_settings()
+        preferred_file = secret_file or Path(getattr(settings, "totp_secret_file", "/var/lib/awarespan/totp_secret.json"))
+        # Test directory write permission; fallback to state/totp_secret.json if non-root dev environment
+        try:
+            preferred_file.parent.mkdir(parents=True, exist_ok=True)
+            self.secret_file = preferred_file
+        except (PermissionError, OSError):
+            self.secret_file = Path("state") / "totp_secret.json"
+            self.secret_file.parent.mkdir(parents=True, exist_ok=True)
+
         self.max_attempts = max_failed_attempts if max_failed_attempts is not None else max_attempts
         self.lockout_duration = lockout_window_sec if lockout_window_sec is not None else lockout_duration_sec
-        self.window = window
+        self.window = window or getattr(settings, "totp_window", 1)
+        self.explicit_secret = secret
         self._secret: Optional[str] = None
         self._rate_limits: Dict[str, RateLimitRecord] = {}
         self._load_or_create_secret()
@@ -105,25 +138,56 @@ class TOTPAuthManager:
         return success
 
     def _load_or_create_secret(self) -> None:
-        """Load persistent secret or initialize a fresh one."""
-        self.secret_file.parent.mkdir(parents=True, exist_ok=True)
+        """
+        Load persistent secret with explicit precedence:
+        1. Explicit parameter passed to constructor
+        2. TOTP_SECRET configured in environment / .env
+        3. Persistent secret_file on disk (e.g. /var/lib/awarespan/totp_secret.json)
+        4. Fresh cryptographically secure generation (never overwriting existing)
+        """
+        settings = get_settings()
+
+        # 1. Constructor parameter
+        if self.explicit_secret and _is_valid_base32(self.explicit_secret):
+            self._secret = self.explicit_secret.strip().upper()
+            log.info("Initialized operator TOTP secret from explicit parameter")
+            self._persist_to_file(self._secret)
+            return
+
+        # 2. Environment / .env variable
+        env_secret = getattr(settings, "totp_secret", "").strip()
+        if env_secret and _is_valid_base32(env_secret):
+            self._secret = env_secret.upper()
+            log.info("Loaded operator TOTP secret from environment configuration")
+            self._persist_to_file(self._secret)
+            return
+
+        # 3. Persistent file on disk
         if self.secret_file.exists():
             try:
                 with open(self.secret_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self._secret = data.get("totp_secret")
-                log.info("Loaded operator TOTP secret from %s", self.secret_file)
-                return
+                    file_secret = data.get("totp_secret", "").strip()
+                    if file_secret and _is_valid_base32(file_secret):
+                        self._secret = file_secret.upper()
+                        log.info("Loaded operator TOTP secret from persistent file: %s", self.secret_file)
+                        return
             except Exception as exc:
-                log.warning("Could not read TOTP secret file: %s; generating new", exc)
+                log.warning("Could not read TOTP secret file: %s", exc)
 
-        # Generate new secret
+        # 4. Generate new secret on first setup
         self._secret = _generate_secret()
+        self._persist_to_file(self._secret)
+        log.info("Provisioned fresh operator TOTP secret at %s", self.secret_file)
+
+    def _persist_to_file(self, secret_str: str) -> bool:
+        """Safely write secret to secret_file with 0600 permissions."""
         try:
+            self.secret_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.secret_file, "w", encoding="utf-8") as f:
                 json.dump(
                     {
-                        "totp_secret": self._secret,
+                        "totp_secret": secret_str,
                         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                         "issuer": "AWARESPAN",
                     },
@@ -131,17 +195,41 @@ class TOTPAuthManager:
                     indent=2,
                 )
             os.chmod(self.secret_file, 0o600)
-            log.info("Provisioned new operator TOTP secret at %s", self.secret_file)
+            return True
         except Exception as exc:
-            log.error("Failed to persist TOTP secret: %s", exc)
+            log.warning("Could not persist TOTP secret file %s: %s", self.secret_file, exc)
+            return False
+
+    def rotate_secret(self, new_secret: Optional[str] = None) -> str:
+        """
+        Explicit operator rotation procedure.
+        Generates or assigns a new secret, persists it, and resets rate limits.
+        """
+        sec = new_secret.strip().upper() if new_secret else _generate_secret()
+        self._secret = sec
+        self._persist_to_file(sec)
+        self._rate_limits.clear()
+        log.info("Rotated operator TOTP secret successfully")
+        return sec
+
+    def is_enrolled(self) -> bool:
+        """Check if a valid secret is enrolled and active."""
+        return bool(self._secret and len(self._secret) >= 16)
 
     @property
     def secret(self) -> str:
         return self._secret or ""
 
-    def get_provisioning_uri(self, account_name: str = "Operator", issuer: str = "AWARESPAN") -> str:
-        """Format standard otpauth:// URI for QR code / authenticator import."""
-        return f"otpauth://totp/{issuer}:{account_name}?secret={self.secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
+    def get_provisioning_uri(
+        self,
+        account_name: Optional[str] = None,
+        issuer: Optional[str] = None,
+    ) -> str:
+        """Format standard otpauth:// URI for authenticator app registration."""
+        settings = get_settings()
+        acc = account_name or getattr(settings, "totp_account_name", "operator")
+        iss = issuer or getattr(settings, "totp_issuer", "AWARESPAN")
+        return f"otpauth://totp/{iss}:{acc}?secret={self.secret}&issuer={iss}&algorithm=SHA1&digits=6&period=30"
 
     def is_rate_limited(self, client_ip: str) -> Tuple[bool, float]:
         """Check if client IP is currently locked out. Returns (is_locked, remaining_seconds)."""

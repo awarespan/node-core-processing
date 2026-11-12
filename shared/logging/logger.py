@@ -34,11 +34,15 @@ def get_known_secrets() -> Set[str]:
             secrets.add(settings.backend_api_key)
         if settings.mqtt_password and len(settings.mqtt_password) > 3:
             secrets.add(settings.mqtt_password)
+        if getattr(settings, "totp_secret", "") and len(settings.totp_secret) > 3:
+            secrets.add(settings.totp_secret)
+        if getattr(settings, "turn_password", "") and len(settings.turn_password) > 3:
+            secrets.add(settings.turn_password)
     except Exception:
         pass
 
     # Also check common environment variables
-    for env_var in ("BOT_TOKEN", "PI_DEVICE_SECRET", "BACKEND_API_KEY", "MQTT_PASSWORD", "SSH_PASSWORD"):
+    for env_var in ("BOT_TOKEN", "PI_DEVICE_SECRET", "BACKEND_API_KEY", "MQTT_PASSWORD", "SSH_PASSWORD", "TOTP_SECRET", "TURN_PASSWORD"):
         val = os.getenv(env_var)
         if val and len(val.strip()) > 3 and val.strip() != "changeme":
             secrets.add(val.strip())

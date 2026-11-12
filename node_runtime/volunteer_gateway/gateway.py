@@ -1,6 +1,7 @@
 """
 AWARESPAN — Volunteer Media Gateway Server
-Coordinates HTTP pairing portal, REST APIs, TLS encryption, and binary WebSocket media ingestion.
+Coordinates HTTP pairing portal, REST APIs, TLS encryption, WebRTC low-latency streaming,
+and binary WebSocket media ingestion with automated fallback.
 
 Project: AWARESPAN
 Tagline: Awareness Without Boundaries.
@@ -14,9 +15,10 @@ import json
 import os
 import ssl
 import subprocess
+import time
 import urllib.parse
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import websockets
 
@@ -33,6 +35,11 @@ from node_runtime.volunteer_gateway.transport.protocol import (
     PacketType,
     parse_incoming_message,
 )
+from node_runtime.volunteer_gateway.transport.webrtc import (
+    WebRTCPeerSession,
+    is_webrtc_supported,
+)
+from node_runtime.volunteer_gateway.tunnel.tunnel_manager import get_tunnel_manager
 
 log = get_logger("volunteer_gateway.core")
 
@@ -66,11 +73,22 @@ class VolunteerGatewayServer:
         self._server = None
         self._stop_event = asyncio.Event()
 
-    async def _process_http_request(self, path: str, request_headers):
+    async def _process_http_request(self, *args, **kwargs):
         """
         Intercept HTTP requests before WebSocket upgrade.
-        Serves REST endpoints and HTML portal without external dependencies.
+        Supports both websockets legacy (path, headers) and websockets 14+ (connection, request) signatures.
         """
+        path = "/"
+        client_ip = "127.0.0.1"
+
+        if len(args) == 2 and isinstance(args[0], str):
+            path = args[0]
+        elif len(args) >= 2:
+            conn, req = args[0], args[1]
+            path = getattr(req, "path", "/")
+            if hasattr(conn, "remote_address") and conn.remote_address:
+                client_ip = conn.remote_address[0]
+
         parsed_url = urllib.parse.urlparse(path)
         route = parsed_url.path
         query = urllib.parse.parse_qs(parsed_url.query)
@@ -90,8 +108,21 @@ class VolunteerGatewayServer:
             ]
             return (http.HTTPStatus(status_code), headers, body.encode("utf-8"))
 
-        # 2. GET /api/volunteer/config
-        elif route == "/api/volunteer/config":
+        # 2. Check for static asset files in configured static dir
+        if not route.startswith("/api/"):
+            static_res = self.api.render_static_file(route)
+            if static_res:
+                status_code, content_type, body_bytes = static_res
+                headers = [
+                    ("Content-Type", content_type),
+                    ("Content-Length", str(len(body_bytes))),
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Connection", "close"),
+                ]
+                return (http.HTTPStatus(status_code), headers, body_bytes)
+
+        # 3. GET /api/volunteer/config
+        if route == "/api/volunteer/config":
             status_code, data = self.api.handle_config_request()
             payload = json.dumps(data).encode("utf-8")
             headers = [
@@ -102,7 +133,7 @@ class VolunteerGatewayServer:
             ]
             return (http.HTTPStatus(status_code), headers, payload)
 
-        # 3. GET /api/volunteer/sources
+        # 4. GET /api/volunteer/sources
         elif route == "/api/volunteer/sources":
             status_code, data = self.api.handle_status_request()
             payload = json.dumps(data).encode("utf-8")
@@ -114,7 +145,33 @@ class VolunteerGatewayServer:
             ]
             return (http.HTTPStatus(status_code), headers, payload)
 
-        # 4. Handle CORS preflight
+        # 5. /api/volunteer/auth
+        elif route == "/api/volunteer/auth":
+            totp_code = query.get("totp_code", [""])[0]
+            capability = query.get("capability", ["both"])[0]
+            if totp_code:
+                status_code, data = self.api.handle_auth_request(
+                    {"totp_code": totp_code, "capability": capability},
+                    client_ip,
+                )
+                payload = json.dumps(data).encode("utf-8")
+                headers = [
+                    ("Content-Type", "application/json"),
+                    ("Content-Length", str(len(payload))),
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Connection", "close"),
+                ]
+                return (http.HTTPStatus(status_code), headers, payload)
+            else:
+                headers = [
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+                    ("Access-Control-Allow-Headers", "Content-Type, Authorization"),
+                    ("Connection", "close"),
+                ]
+                return (http.HTTPStatus.OK, headers, b'{"ok": true}')
+
+        # 6. Handle CORS preflight
         elif route.startswith("/api/"):
             headers = [
                 ("Access-Control-Allow-Origin", "*"),
@@ -128,7 +185,7 @@ class VolunteerGatewayServer:
         return (http.HTTPStatus.NOT_FOUND, [("Connection", "close")], b"Not Found")
 
     async def _handle_websocket(self, websocket):
-        """Handle active volunteer device WebSocket connection."""
+        """Handle active volunteer device WebSocket connection with signaling and binary transport."""
         parsed_url = urllib.parse.urlparse(getattr(websocket, "path", "/"))
         query_params = urllib.parse.parse_qs(parsed_url.query)
         client_ip = websocket.remote_address[0] if websocket.remote_address else "127.0.0.1"
@@ -136,93 +193,176 @@ class VolunteerGatewayServer:
         log.info("Incoming volunteer WebSocket from %s", client_ip)
         token = query_params.get("token", [""])[0]
         session: Optional[VolunteerSession] = None
+        webrtc_session: Optional[WebRTCPeerSession] = None
 
+        # Check if paired via URL query token
         if token:
             ok, sess, msg = self.session_mgr.redeem_pairing_token(token, client_ip)
             if ok and sess:
                 session = sess
+                self._register_session_source(session, client_ip)
+                await websocket.send(json.dumps({
+                    "type": "authorized",
+                    "source_id": session.source_id,
+                    "session_id": session.session_id,
+                    "message": "Connected to AWARESPAN Edge Core",
+                }))
             else:
                 log.warning("Pairing token redemption rejected: %s", msg)
                 await websocket.send(json.dumps({"type": "error", "message": msg}))
                 await websocket.close(1008, msg)
                 return
 
-        # If not authorized via query parameter, wait for first auth frame
-        if not session:
-            try:
-                first_msg = await asyncio.wait_for(websocket.recv(), timeout=10.0)
-                data = json.loads(first_msg)
-                token = data.get("pairing_token") or data.get("token")
-                ok, sess, msg = self.session_mgr.redeem_pairing_token(token, client_ip)
-                if not ok or not sess:
-                    await websocket.send(json.dumps({"type": "error", "message": msg}))
-                    await websocket.close(1008, msg)
-                    return
-                session = sess
-            except Exception as exc:
-                log.warning("WebSocket handshake authentication failed: %s", exc)
-                await websocket.close(1008, "Auth timeout")
-                return
+        try:
+            async for message in websocket:
+                # Text Frame: Control plane, auth, and WebRTC signaling
+                if isinstance(message, str):
+                    try:
+                        data = json.loads(message)
+                    except Exception:
+                        continue
 
-        # Register source in MediaSourceRegistry
-        source_id = session.source_id
+                    mtype = data.get("type", "")
+
+                    # 1. Direct WebSocket Authentication
+                    if mtype == "auth" and not session:
+                        totp_code = str(data.get("totp_code", "")).strip()
+                        cap_str = str(data.get("capability", "both")).lower()
+                        caps = {"camera", "microphone"}
+                        if cap_str in ("camera", "camera_only"):
+                            caps = {"camera"}
+                        elif cap_str in ("microphone", "mic_only"):
+                            caps = {"microphone"}
+
+                        success, msg = self.auth_mgr.verify_attempt(client_ip, totp_code)
+                        if not success:
+                            await websocket.send(json.dumps({"type": "error", "message": msg}))
+                            await websocket.close(1008, msg)
+                            return
+
+                        ok, sess, msg = self.session_mgr.create_direct_session(client_ip, caps)
+                        if not ok or not sess:
+                            await websocket.send(json.dumps({"type": "error", "message": msg}))
+                            await websocket.close(1008, msg)
+                            return
+
+                        session = sess
+                        self._register_session_source(session, client_ip)
+                        await websocket.send(json.dumps({
+                            "type": "authorized",
+                            "source_id": session.source_id,
+                            "session_id": session.session_id,
+                            "granted_capabilities": list(caps),
+                            "message": "Authorized by operator TOTP",
+                        }))
+                        continue
+
+                    if not session:
+                        # Unauthorized message
+                        await websocket.send(json.dumps({"type": "error", "message": "Unauthorized"}))
+                        continue
+
+                    self.session_mgr.record_activity(session.session_id)
+                    self.registry.record_heartbeat(session.source_id)
+
+                    # 2. WebRTC SDP Offer
+                    if mtype == "webrtc_offer":
+                        if is_webrtc_supported():
+                            if not webrtc_session:
+                                webrtc_session = WebRTCPeerSession(
+                                    source_id=session.source_id,
+                                    session_id=session.session_id,
+                                    router=self.router,
+                                )
+                            try:
+                                answer = await webrtc_session.handle_offer(
+                                    sdp=data.get("sdp", ""),
+                                    sdp_type=data.get("sdp_type", "offer"),
+                                )
+                                await websocket.send(json.dumps({
+                                    "type": "webrtc_answer",
+                                    "sdp": answer["sdp"],
+                                    "sdp_type": answer["type"],
+                                }))
+                            except Exception as exc:
+                                log.warning("WebRTC offer negotiation error for %s: %s", session.source_id, exc)
+                                await websocket.send(json.dumps({"type": "fallback", "message": str(exc)}))
+                        else:
+                            log.info("WebRTC not supported on server; requesting binary WS fallback")
+                            await websocket.send(json.dumps({"type": "fallback", "message": "WebRTC unavailable"}))
+
+                    # 3. WebRTC ICE Candidate
+                    elif mtype == "ice_candidate":
+                        if webrtc_session:
+                            await webrtc_session.handle_ice_candidate(data)
+
+                    # 4. Keepalive Ping
+                    elif mtype == "ping":
+                        await websocket.send(json.dumps({"type": "pong", "timestamp": int(time.time() * 1000)}))
+
+                    # 5. Disconnect signal
+                    elif mtype == "disconnect":
+                        log.info("Volunteer %s sent disconnect signal", session.source_id)
+                        break
+
+                # Binary Frame: Direct AWSP Media Stream
+                elif isinstance(message, bytes):
+                    if not session:
+                        continue
+
+                    self.session_mgr.record_activity(session.session_id)
+                    self.registry.record_heartbeat(session.source_id)
+
+                    pkt = parse_incoming_message(message, fallback_source_id=session.source_id)
+                    if not pkt:
+                        continue
+
+                    if pkt.packet_type == PacketType.FRAME_JPEG:
+                        self.router.ingest_frame(
+                            source_id=session.source_id,
+                            frame_id=pkt.seq_id,
+                            source_ts_ms=pkt.timestamp_ms,
+                            jpeg_bytes=pkt.payload,
+                        )
+                    elif pkt.packet_type == PacketType.AUDIO_PCM:
+                        self.router.ingest_audio(
+                            source_id=session.source_id,
+                            source_ts_ms=pkt.timestamp_ms,
+                            pcm_bytes=pkt.payload,
+                        )
+                    elif pkt.packet_type == PacketType.DISCONNECT:
+                        break
+
+        except websockets.exceptions.ConnectionClosed:
+            log.debug("Volunteer connection closed for %s", getattr(session, "source_id", "unauth"))
+        except Exception as exc:
+            log.warning("Exception in volunteer connection handler: %s", exc)
+        finally:
+            if webrtc_session:
+                await webrtc_session.close()
+
+            if session:
+                log.info("Volunteer source %s disconnected", session.source_id)
+                self.registry.update_state(session.source_id, SourceState.DISCONNECTED, reason="Transport closed")
+                self.session_mgr.revoke_session(session.session_id, reason="Connection ended")
+
+    def _register_session_source(self, session: VolunteerSession, client_ip: str) -> None:
+        """Register active volunteer device into central MediaSourceRegistry."""
         caps = session.granted_capabilities
         stype = SourceType.COMBINED if len(caps) > 1 else (SourceType.CAMERA if "camera" in caps else SourceType.MICROPHONE)
 
         media_src = MediaSource(
-            source_id=source_id,
+            source_id=session.source_id,
             node_id=get_settings().node_id,
             source_type=stype,
             source_origin=SourceOrigin.BROWSER_VOLUNTEER,
             display_name=f"Volunteer Device ({client_ip})",
             session_id=session.session_id,
             connection_state=SourceState.CONNECTING,
-            transport="websocket_binary",
+            transport="webrtc_ws",
             capabilities={"granted": list(caps)},
         )
         self.registry.register_source(media_src)
-
-        await websocket.send(json.dumps({
-            "type": "authorized",
-            "source_id": source_id,
-            "session_id": session.session_id,
-            "message": "Connected to AWARESPAN Edge Core"
-        }))
-
-        try:
-            async for message in websocket:
-                self.session_mgr.record_activity(session.session_id)
-                self.registry.record_heartbeat(source_id)
-
-                pkt = parse_incoming_message(message, fallback_source_id=source_id)
-                if not pkt:
-                    continue
-
-                if pkt.packet_type == PacketType.FRAME_JPEG:
-                    self.router.ingest_frame(
-                        source_id=source_id,
-                        frame_id=pkt.seq_id,
-                        source_ts_ms=pkt.timestamp_ms,
-                        jpeg_bytes=pkt.payload,
-                    )
-                elif pkt.packet_type == PacketType.AUDIO_PCM:
-                    self.router.ingest_audio(
-                        source_id=source_id,
-                        source_ts_ms=pkt.timestamp_ms,
-                        pcm_bytes=pkt.payload,
-                    )
-                elif pkt.packet_type == PacketType.DISCONNECT:
-                    log.info("Volunteer source %s sent disconnect signal", source_id)
-                    break
-
-        except websockets.exceptions.ConnectionClosed:
-            log.debug("Volunteer connection closed for source %s", source_id)
-        except Exception as exc:
-            log.warning("Exception in volunteer streaming loop for %s: %s", source_id, exc)
-        finally:
-            log.info("Volunteer source %s disconnected", source_id)
-            self.registry.update_state(source_id, SourceState.DISCONNECTED, reason="Transport closed")
-            self.session_mgr.revoke_session(session.session_id, reason="Connection ended")
 
     def _get_ssl_context(self) -> Optional[ssl.SSLContext]:
         """Create or load SSL context for local HTTPS context."""
@@ -238,7 +378,7 @@ class VolunteerGatewayServer:
                     "openssl", "req", "-x509", "-newkey", "rsa:2048",
                     "-keyout", str(key_file), "-out", str(cert_file),
                     "-days", "365", "-nodes",
-                    "-subj", "/CN=awarespan.local/O=AWARESPAN"
+                    "-subj", "/CN=awarespan.local/O=AWARESPAN",
                 ]
                 subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
                 os.chmod(key_file, 0o600)

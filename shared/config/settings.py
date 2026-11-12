@@ -237,6 +237,15 @@ class Settings:
     volunteer_portal_static_dir: str = field(
         default_factory=lambda: _get_str("VOLUNTEER_PORTAL_STATIC_DIR", str(REPO_ROOT / "static" / "volunteer"))
     )
+    totp_secret: str = field(
+        default_factory=lambda: _get_str("TOTP_SECRET", "")
+    )
+    totp_issuer: str = field(
+        default_factory=lambda: _get_str("TOTP_ISSUER", "AWARESPAN")
+    )
+    totp_account_name: str = field(
+        default_factory=lambda: _get_str("TOTP_ACCOUNT_NAME", "operator")
+    )
     totp_secret_file: str = field(
         default_factory=lambda: _get_str("TOTP_SECRET_FILE", "/var/lib/awarespan/totp_secret.json")
     )
@@ -251,6 +260,35 @@ class Settings:
     )
     ap_gateway_ip: str = field(
         default_factory=lambda: _get_str("AP_GATEWAY_IP", "192.168.4.1")
+    )
+
+    # Remote Ingress, Tunneling & WebRTC
+    remote_connectivity_enabled: bool = field(
+        default_factory=lambda: _get_bool("REMOTE_CONNECTIVITY_ENABLED", True)
+    )
+    tunnel_type: str = field(
+        default_factory=lambda: _get_str("TUNNEL_TYPE", "tailscale")
+    )
+    remote_tunnel_url: str = field(
+        default_factory=lambda: _get_str("REMOTE_TUNNEL_URL", "")
+    )
+    webrtc_enabled: bool = field(
+        default_factory=lambda: _get_bool("WEBRTC_ENABLED", True)
+    )
+    stun_servers: List[str] = field(
+        default_factory=lambda: _get_list(
+            "STUN_SERVERS",
+            ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]
+        )
+    )
+    turn_url: str = field(
+        default_factory=lambda: _get_str("TURN_URL", "")
+    )
+    turn_username: str = field(
+        default_factory=lambda: _get_str("TURN_USERNAME", "")
+    )
+    turn_password: str = field(
+        default_factory=lambda: _get_str("TURN_PASSWORD", "")
     )
 
     # Logging
