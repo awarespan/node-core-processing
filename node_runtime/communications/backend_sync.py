@@ -286,6 +286,21 @@ class BackendSync:
             if res.status_code in (200, 201):
                 log.info("Incident %s synced via REST API (status %d)", event.event_id, res.status_code)
                 return True
+            if res.status_code == 500 and ("modelVersion" in payload or "confidence" in payload):
+                fallback_payload = {
+                    "incidentId": event.event_id,
+                    "idempotencyKey": event.event_id,
+                    "nodeId": self.node_id,
+                    "threatType": threat_type,
+                    "threatSeverity": threat_severity,
+                    "threatDescription": threat_desc,
+                    "detectionTime": detection_time,
+                    "deterrence": deterrence or {},
+                }
+                res2 = requests.post(url, json=fallback_payload, headers=self.headers, timeout=5)
+                if res2.status_code in (200, 201):
+                    log.info("Incident %s synced via fallback REST payload (status %d)", event.event_id, res2.status_code)
+                    return True
             log.warning("REST incident sync failed (status %d): %s", res.status_code, res.text[:200])
             return False
         except Exception as exc:
@@ -313,4 +328,42 @@ class BackendSync:
             return False
         except Exception as exc:
             log.debug("Heartbeat transmission exception: %s", exc)
+            return False
+
+    def get_pending_commands(self) -> List[Dict[str, Any]]:
+        """Fetch pending commands from central backend."""
+        if not self.api_url:
+            return []
+        url = f"{self.api_url}/api/v1/commands/pending/{self.node_id}"
+        try:
+            res = requests.get(url, headers=self.headers, timeout=4)
+            if res.status_code == 200:
+                data = res.json()
+                return data if isinstance(data, list) else []
+            return []
+        except Exception as exc:
+            log.debug("Get pending commands exception: %s", exc)
+            return []
+
+    def acknowledge_command(self, command_id: str) -> bool:
+        """Acknowledge completed command to central backend."""
+        if not self.api_url:
+            return False
+        url = f"{self.api_url}/api/v1/commands/{command_id}/acknowledge"
+        try:
+            res = requests.post(url, headers=self.headers, timeout=4)
+            return res.status_code in (200, 204)
+        except Exception:
+            return False
+
+    def report_media_result(self, media_id: str, result: Dict[str, Any]) -> bool:
+        """Report inference / processing results for test media job."""
+        if not self.api_url:
+            return False
+        url = f"{self.api_url}/api/v1/media/{media_id}/result"
+        try:
+            res = requests.post(url, json=result, headers=self.headers, timeout=5)
+            return res.status_code == 200
+        except Exception as exc:
+            log.debug("Report media result exception: %s", exc)
             return False

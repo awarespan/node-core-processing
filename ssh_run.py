@@ -7,7 +7,7 @@ import dotenv
 # Load operator environment if present
 OPERATOR_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.operator")
 if os.path.exists(OPERATOR_ENV):
-    dotenv.load_dotenv(OPERATOR_ENV)
+    dotenv.load_dotenv(OPERATOR_ENV, override=True)
 
 def run_ssh(host, user, pwd, command):
     client = SSHClient()
@@ -28,8 +28,13 @@ def run_ssh(host, user, pwd, command):
         if err:
             f.write("STDERR:\n")
             f.write(err)
-        
+    if out:
+        print(out, end="")
+    if err:
+        print(err, file=sys.stderr, end="")
     client.close()
+    if exit_status != 0:
+        sys.exit(exit_status)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

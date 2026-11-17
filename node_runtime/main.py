@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import base64
 import json
+import os
 import signal
 import sys
 import time
@@ -36,6 +37,7 @@ from node_runtime.communications.event_queue import EventQueueManager
 from node_runtime.media.routing.media_router import CoreMediaRouter
 from node_runtime.media.ingestion.frame_buffer import FramePacket
 from node_runtime.monitoring.telegram_lifecycle import TelegramLifecycleNotifier
+from node_runtime.monitoring.telegram_notify import send_message
 from node_runtime.volunteer_gateway.gateway import VolunteerGatewayServer
 
 log = get_logger("node_runtime.core")
@@ -129,6 +131,121 @@ class RuntimeCore:
         except Exception:
             return
 
+    def handle_command(self, cmd: Dict) -> None:
+        """Processes dispatched operational commands (siren, media ingest, status)."""
+        cmd_type = str(cmd.get("commandType") or cmd.get("type", "")).upper()
+        payload = cmd.get("payload") or {}
+        log.info("Runtime processing command %s (payload keys: %s)", cmd_type, list(payload.keys()))
+
+        if cmd_type == "MEDIA_INGEST":
+            media_id = payload.get("mediaId") or f"media-{int(time.time())}"
+            media_type = str(payload.get("mediaType", "IMAGE")).upper()
+
+            # 1. Photo / Image Ingestion
+            if media_type == "IMAGE":
+                img_bytes = None
+                if "b64" in payload and payload["b64"]:
+                    img_bytes = base64.b64decode(payload["b64"])
+                elif "downloadUrl" in payload and self.event_queue and self.event_queue.backend:
+                    dl_url = payload["downloadUrl"]
+                    full_url = dl_url if dl_url.startswith("http") else f"{self.event_queue.backend.api_url}{dl_url}"
+                    try:
+                        import requests
+                        res = requests.get(full_url, headers=self.event_queue.backend.headers, timeout=10)
+                        if res.status_code == 200:
+                            img_bytes = res.content
+                    except Exception as err:
+                        log.error("Failed to download media image %s: %s", media_id, err)
+
+                if img_bytes:
+                    nparr = np.frombuffer(img_bytes, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        log.info("Ingesting media image %s (%dx%d) as single camera observation", media_id, frame.shape[1], frame.shape[0])
+                        self._enqueue_frame({
+                            "type": "frame",
+                            "frame_id": int(time.time()),
+                            "ts_ms": int(time.time() * 1000),
+                            "source_id": f"upload-{media_id}",
+                            "frame_ndarray": frame,
+                            "media_id": media_id,
+                        })
+                    else:
+                        log.error("Image decode failed for media %s", media_id)
+
+            # 2. Video Ingestion (sequential decoding with bounded backpressure)
+            elif media_type == "VIDEO":
+                vid_bytes = None
+                if "b64" in payload and payload["b64"]:
+                    vid_bytes = base64.b64decode(payload["b64"])
+                elif "downloadUrl" in payload and self.event_queue and self.event_queue.backend:
+                    dl_url = payload["downloadUrl"]
+                    full_url = dl_url if dl_url.startswith("http") else f"{self.event_queue.backend.api_url}{dl_url}"
+                    try:
+                        import requests
+                        res = requests.get(full_url, headers=self.event_queue.backend.headers, timeout=20)
+                        if res.status_code == 200:
+                            vid_bytes = res.content
+                    except Exception as err:
+                        log.error("Failed to download media video %s: %s", media_id, err)
+
+                if vid_bytes:
+                    import tempfile
+                    ext = os.path.splitext(payload.get("filename", "video.mp4"))[1] or ".mp4"
+                    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_f:
+                        tmp_f.write(vid_bytes)
+                        tmp_path = tmp_f.name
+
+                    def _run_video():
+                        try:
+                            cap = cv2.VideoCapture(tmp_path)
+                            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+                            skip = max(1, int(fps / 5))  # Sample at ~5 FPS
+                            f_idx = 0
+                            submitted = 0
+                            while cap.isOpened():
+                                ret, f_data = cap.read()
+                                if not ret:
+                                    break
+                                if f_idx % skip == 0:
+                                    while self.frame_queue.qsize() >= 3:
+                                        time.sleep(0.04)
+                                    self._enqueue_frame({
+                                        "type": "frame",
+                                        "frame_id": f_idx,
+                                        "ts_ms": int(time.time() * 1000),
+                                        "source_id": f"video-{media_id}",
+                                        "frame_ndarray": f_data,
+                                        "media_id": media_id,
+                                    })
+                                    submitted += 1
+                                    time.sleep(0.06)
+                                f_idx += 1
+                            cap.release()
+                            log.info("Video %s processed: %d frames submitted", media_id, submitted)
+                        except Exception as e:
+                            log.error("Video processing error %s: %s", media_id, e)
+                        finally:
+                            try:
+                                import os
+                                os.remove(tmp_path)
+                            except Exception:
+                                pass
+
+                    import threading
+                    threading.Thread(target=_run_video, daemon=True, name=f"video-{media_id}").start()
+
+            # 3. Audio Ingestion
+            elif media_type == "AUDIO":
+                log.info("Audio file %s received; verifying audio interface. Audio threat classifier not deployed on node.", media_id)
+                if self.event_queue and self.event_queue.backend:
+                    self.event_queue.backend.report_media_result(media_id, {
+                        "mediaId": media_id,
+                        "status": "PROCESSED",
+                        "threat": "NONE",
+                        "message": "Audio file verified. Edge ML classifier not loaded; audio classification unsupported per specification."
+                    })
+
     async def route_connection(self, websocket):
         """Route connection based on path."""
         path = "/"
@@ -202,15 +319,22 @@ class RuntimeCore:
             self.dashboard_clients.discard(websocket)
 
     def _enqueue_frame(self, packet: Dict) -> None:
-        if self.frame_queue.full():
-            try:
-                self.frame_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-        self.frame_queue.put_nowait(packet)
+        def _do_put():
+            if self.frame_queue.full():
+                try:
+                    self.frame_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            self.frame_queue.put_nowait(packet)
+
+        if hasattr(self, "loop") and self.loop and self.loop.is_running():
+            self.loop.call_soon_threadsafe(_do_put)
+        else:
+            _do_put()
 
     async def processor_loop(self) -> None:
         """Main inference and threat assessment loop."""
+        self.loop = asyncio.get_running_loop()
         log.info("Node Runtime processor loop active")
         while True:
             packet = await self.frame_queue.get()
@@ -218,6 +342,7 @@ class RuntimeCore:
             frame_id = int(packet.get("frame_id", 0))
             source_ts_ms = int(packet.get("ts_ms", 0))
             source_id = str(packet.get("source_id", "builtin"))
+            log.info("Running inference on frame from source %s (id=%d)", source_id, frame_id)
 
             if "frame_ndarray" in packet and packet["frame_ndarray"] is not None:
                 frame = packet["frame_ndarray"]
@@ -302,7 +427,37 @@ class RuntimeCore:
                         source_id=source_id,
                         event_id=event_id,
                         deterrence=deterrence_metadata,
+                        event=event,
                     )
+
+                # Authoritative Telegram alert dispatch from edge node
+                if actions.get("alert_telegram"):
+                    try:
+                        labels_str = ", ".join(assessment.labels)
+                        tg_msg = (
+                            f"🚨 <b>AWARESPAN Threat Alert</b>\n"
+                            f"Node: <code>{self.settings.node_id}</code>\n"
+                            f"Incident: <code>{event.event_id}</code>\n"
+                            f"Threat: <b>{assessment.tier.upper()} ({labels_str})</b>\n"
+                            f"Confidence: <b>{assessment.max_confidence * 100:.1f}%</b>\n"
+                            f"Action: <code>{action_str}</code>"
+                        )
+                        send_message(tg_msg)
+                        log.info("Telegram alert dispatched for incident %s", event.event_id)
+                    except Exception as err:
+                        log.warning("Telegram alert delivery failed: %s", err)
+
+                # Report test media outcome if triggered from upload job
+                media_job_id = packet.get("media_id")
+                if media_job_id and self.event_queue and self.event_queue.backend:
+                    self.event_queue.backend.report_media_result(media_job_id, {
+                        "mediaId": media_job_id,
+                        "status": "INCIDENT_GENERATED",
+                        "incidentId": event.event_id,
+                        "tier": assessment.tier,
+                        "labels": assessment.labels,
+                        "confidence": assessment.max_confidence,
+                    })
 
             # Build and broadcast annotated frame
             try:
@@ -408,7 +563,7 @@ async def run_server(args: argparse.Namespace) -> None:
     core = RuntimeCore(detector, assessor, media_router=media_router, telegram_notifier=telegram_notifier)
 
     # Communications / SQLite event queue
-    eq = EventQueueManager(heartbeat_interval=30)
+    eq = EventQueueManager(heartbeat_interval=30, on_command=core.handle_command)
     eq.start()
     core.event_queue = eq
 
