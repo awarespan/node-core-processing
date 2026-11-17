@@ -1,9 +1,9 @@
 # CONTEXT.md — AWARESPAN
 ### Master Project, Academic and Engineering Reference
-**Project name:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Official problem statement:** An AI-Powered Safety Device.  
-**Last updated:** 11 November 2026 | **Maintained by:** B C H Benjamin (Team Lead)
+**Project name:** AWARESPAN
+**Tagline:** Awareness Without Boundaries.
+**Official problem statement:** An AI-Powered Safety Device.
+**Last updated:** 17 November 2026 | **Maintained by:** B C H Benjamin (Team Lead)
 
 ---
 
@@ -1146,3 +1146,30 @@ agy --conversation=<use the authorised existing project conversation ID; do not 
 - **Domain migration remains pending:** the existing API hostname `api.sip.bchbenjamin.in` is preserved as a known legacy/current configuration reference. No new public AWARESPAN website domain has been confirmed in this document. Do not guess or silently change DNS, TLS, CORS or app configuration.
 
 **Important:** This context records the approved branding and target identity across all components. It does not claim that the Android application, backend, Pi software, website deployment, DNS records, app-store listings, package identifiers or release artifacts have already been changed. Those require separate implementation and verification tasks.
+
+---
+
+## AWARESPAN Deterrence, Incident Delivery and Temporary Portal Update — 17 November 2026
+
+### Pi-owned deterrence output
+- Deterrence audio is generated and played locally by the Raspberry Pi; the temporary website must not generate or play the warning tone.
+- Current implementation selects a fresh pseudo-random pitch for each eligible emission within the configured **900–1100 Hz** range. Following the research review (17 November 2026), this range is retained only as a generic audible alert-pitch range; it is not a research-validated deterrence, irritation, or animal-repellent band. Random pitch variation is not proven to prevent habituation.
+- Peer-reviewed human studies report greater unpleasantness for some high-frequency tones under matched-loudness conditions, but they do not establish a universally effective/safe human deterrence band. Canine studies show high-frequency hearing sensitivity but no universal aversive/repellent band; one dog-device study found no tested frequency/level repelled all dogs. Do not substitute 14–18 kHz human tones or 20–45 kHz ultrasonic dog tones. Research details and references are in `docs/ACOUSTIC_WARNING_RESEARCH.md`.
+- Speaker output now fails closed by default: `SPEAKER_ENABLED=false`, `SIREN_ENABLED=false`, `PRESENCE_DETERRENCE_ENABLED=false`; `person` is the only default presence target and the response selector filters `dog` out of audio targets even if it is explicitly added to configuration. Enabling speaker output requires physical transducer/amplifier verification and calibrated SPL measurement at representative positions. Digital amplitude is not SPL, and ALSA card detection alone does not prove a physical speaker is connected.
+- The Pi checks for an ALSA playback interface (`aplay -l`) before playback. This detects an audio interface/card, not proof that a speaker transducer is physically connected, audible, or calibrated. Verify the physical speaker/amplifier during hardware commissioning.
+
+### Incident delivery to the actual product
+- A Pi detection incident carries the deterrence attempt/result (attempted, started, reason, selected frequency, duration, emission count and output device) over both MQTT and REST. The local SQLite retry queue retains this metadata when delivery is offline. MQTT and REST payloads were aligned to the backend Pi-ingestion DTO contract.
+- The Java backend persists an attempted deterrence as a `DETERRENCE` row in `response_events`, includes response events in incident list/detail DTOs, and includes the result in the live incident broadcast after commit.
+- Android maps the response event and surfaces the Pi-reported start/failure result and recorded details in Event History. Telegram remains a diagnostic/testing channel; it is not the product delivery path.
+
+### Temporary website audio ownership/interlock
+- Removed the browser-local deterrence tone preview/player. The website must not donate microphone audio or receive/handle audio while Pi audio output is owned by the Pi.
+- The portal checks Pi capabilities before requesting browser media permissions. If a playback interface is reported, microphone donation is blocked; a combined camera+microphone selection degrades to camera-only. The Pi also rejects microphone/audio-chunk input.
+- The current Pi runtime does **not** implement live volunteer microphone ingestion, so production microphone donation remains disabled even when no playback interface is reported. Camera input remains the supported temporary portal source. The portal shows Pi audio ownership/capability status and does not treat a WebSocket connection as a source acknowledgement.
+
+### Verification and remaining limitations
+- Temporary frontend: production build passed; 24 tests passed in the latest completed run.
+- Pi Python modules: `compileall` and `git diff --check` passed. Manual mocked smoke checks verified fail-closed defaults, settings-controlled explicit enablement, randomized bounded pitch generation, and unconditional dog-label exclusion from speaker responses. Earlier mocked checks exercised persisted cooldown/count, SQLite metadata retention, and REST/MQTT payload construction. Full pytest was not run because `pytest` and `python-dotenv` are not installed in the Box environment. None of these are tests on the physical Raspberry Pi or speaker.
+- Java backend and Android Gradle tests were **not run**: the Box environment lacked the database repository's Gradle wrapper JAR and the Android wrapper distribution. Compile/integration status remains unverified. No live backend/database, MQTT broker, Android device, Telegram service, or Pi hardware end-to-end test was completed.
+- Changes are local in the Box workspace and were not committed or pushed to GitHub as part of this update.

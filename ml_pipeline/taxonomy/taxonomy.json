@@ -46,10 +46,14 @@
       "modality": "visual",
       "task": "object_detection",
       "severity": 4,
-      "default_confidence_threshold": 0.40,
+      "default_confidence_threshold": 0.4,
       "evidence_requirements": "Single high-confidence visual bounding box or multi-frame persistence >= 2 frames.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "strobe"
+      ]
     },
     "weapon.firearm.rifle": {
       "parent_category": "weapon",
@@ -58,10 +62,15 @@
       "modality": "visual",
       "task": "object_detection",
       "severity": 4,
-      "default_confidence_threshold": 0.40,
+      "default_confidence_threshold": 0.4,
       "evidence_requirements": "Single visual detection >= threshold.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe", "siren"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "strobe",
+        "siren"
+      ]
     },
     "weapon.edged.knife": {
       "parent_category": "weapon",
@@ -73,7 +82,11 @@
       "default_confidence_threshold": 0.45,
       "evidence_requirements": "Visual bounding box >= threshold.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "strobe"
+      ]
     },
     "weapon.edged.machete": {
       "parent_category": "weapon",
@@ -82,10 +95,15 @@
       "modality": "visual",
       "task": "object_detection",
       "severity": 4,
-      "default_confidence_threshold": 0.40,
+      "default_confidence_threshold": 0.4,
       "evidence_requirements": "Visual bounding box >= threshold.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe", "siren"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "strobe",
+        "siren"
+      ]
     },
     "human_activity.violence.fighting": {
       "parent_category": "human_activity",
@@ -94,10 +112,14 @@
       "modality": "visual",
       "task": "action_recognition",
       "severity": 3,
-      "default_confidence_threshold": 0.60,
+      "default_confidence_threshold": 0.6,
       "evidence_requirements": "Temporal correlation across >= 1.5s video window.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "strobe"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "strobe"
+      ]
     },
     "human_activity.distress.fall": {
       "parent_category": "human_activity",
@@ -109,7 +131,10 @@
       "default_confidence_threshold": 0.65,
       "evidence_requirements": "Rapid downward displacement followed by non-upright posture >= 3s.",
       "threat_tier": 1,
-      "allowed_actions": ["cloud_alert", "telegram_alert"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert"
+      ]
     },
     "animal.wildlife.general": {
       "parent_category": "animal",
@@ -121,7 +146,9 @@
       "default_confidence_threshold": 0.35,
       "evidence_requirements": "Visual bounding box. Defaults to passive logging unless proximity rules trigger.",
       "threat_tier": 0,
-      "allowed_actions": ["log_only"]
+      "allowed_actions": [
+        "log_only"
+      ]
     },
     "animal.wildlife.predator": {
       "parent_category": "animal",
@@ -130,10 +157,14 @@
       "modality": "visual",
       "task": "object_detection",
       "severity": 2,
-      "default_confidence_threshold": 0.50,
+      "default_confidence_threshold": 0.5,
       "evidence_requirements": "Visual detection with verified species label.",
       "threat_tier": 1,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "soft_deterrence"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "soft_deterrence"
+      ]
     },
     "hazard.fire.flame": {
       "parent_category": "hazard",
@@ -145,7 +176,12 @@
       "default_confidence_threshold": 0.55,
       "evidence_requirements": "Sustained flame detection across >= 2 consecutive frames.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "siren", "strobe"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "siren",
+        "strobe"
+      ]
     },
     "hazard.fire.smoke": {
       "parent_category": "hazard",
@@ -154,10 +190,13 @@
       "modality": "visual",
       "task": "object_detection",
       "severity": 3,
-      "default_confidence_threshold": 0.50,
+      "default_confidence_threshold": 0.5,
       "evidence_requirements": "Volumetric particulate detection over temporal window.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert"
+      ]
     },
     "intrusion.perimeter.breach": {
       "parent_category": "intrusion",
@@ -166,10 +205,13 @@
       "modality": "visual",
       "task": "zone_detection",
       "severity": 2,
-      "default_confidence_threshold": 0.50,
+      "default_confidence_threshold": 0.5,
       "evidence_requirements": "Centroid vector trajectory crossing polygon boundary.",
       "threat_tier": 1,
-      "allowed_actions": ["cloud_alert", "telegram_alert"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert"
+      ]
     },
     "audio.threat.gunshot": {
       "parent_category": "audio",
@@ -178,10 +220,14 @@
       "modality": "acoustic",
       "task": "audio_classification",
       "severity": 4,
-      "default_confidence_threshold": 0.50,
+      "default_confidence_threshold": 0.5,
       "evidence_requirements": "Spectral peak and acoustic classifier output matching firearm profile.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "visual_cue"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "visual_cue"
+      ]
     },
     "audio.threat.scream": {
       "parent_category": "audio",
@@ -193,7 +239,11 @@
       "default_confidence_threshold": 0.55,
       "evidence_requirements": "Acoustic classifier score >= threshold over >= 400ms duration.",
       "threat_tier": 2,
-      "allowed_actions": ["cloud_alert", "telegram_alert", "visual_cue"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert",
+        "visual_cue"
+      ]
     },
     "audio.threat.glass_break": {
       "parent_category": "audio",
@@ -202,10 +252,13 @@
       "modality": "acoustic",
       "task": "audio_classification",
       "severity": 2,
-      "default_confidence_threshold": 0.50,
+      "default_confidence_threshold": 0.5,
       "evidence_requirements": "Acoustic classifier output matching glass shatter profile.",
       "threat_tier": 1,
-      "allowed_actions": ["cloud_alert", "telegram_alert"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert"
+      ]
     },
     "audio.threat.alarm": {
       "parent_category": "audio",
@@ -214,10 +267,43 @@
       "modality": "acoustic",
       "task": "audio_classification",
       "severity": 2,
-      "default_confidence_threshold": 0.60,
+      "default_confidence_threshold": 0.6,
       "evidence_requirements": "Repeated tonal harmonic peak matching alarm signatures.",
       "threat_tier": 1,
-      "allowed_actions": ["cloud_alert", "telegram_alert"]
+      "allowed_actions": [
+        "cloud_alert",
+        "telegram_alert"
+      ]
+    },
+    "human.presence.person": {
+      "parent_category": "human_presence",
+      "display_name": "Person Presence",
+      "definition": "A person detected in the monitored camera view. Presence alone is not evidence of violence or criminal intent.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 1,
+      "default_confidence_threshold": 0.4,
+      "evidence_requirements": "Person bounding box; perimeter or zone policy must determine whether an audible warning is appropriate.",
+      "threat_tier": 1,
+      "allowed_actions": [
+        "operator_alert",
+        "soft_deterrence"
+      ]
+    },
+    "animal.companion.dog": {
+      "parent_category": "animal_presence",
+      "display_name": "Dog Presence",
+      "definition": "A dog detected in the monitored camera view. Presence alone does not establish aggression.",
+      "modality": "visual",
+      "task": "object_detection",
+      "severity": 1,
+      "default_confidence_threshold": 0.4,
+      "evidence_requirements": "Dog bounding box; use only a brief, low-amplitude audible warning and respect configured cooldown.",
+      "threat_tier": 1,
+      "allowed_actions": [
+        "operator_alert",
+        "soft_deterrence"
+      ]
     }
   }
 }

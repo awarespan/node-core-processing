@@ -55,3 +55,11 @@ node-backend/
 
 # Context
 CONTEXT/
+
+# Local training data (never commit datasets)
+datasets/registered/
+datasets/raw/
+datasets/processed/
+datasets/cache/
+# Training output and checkpoints
+runs/

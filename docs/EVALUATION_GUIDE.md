@@ -1,10 +1,10 @@
 # AWARESPAN — Evaluator & Field Demonstration Guide
 
-**Project:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Problem Statement:** An AI-Powered Safety Device.  
-**Contact:** awarespan@bchbenjamin.in  
-**Evaluation Target:** Raspberry Pi 5 (4 GB RAM)  
+**Project:** AWARESPAN
+**Tagline:** Awareness Without Boundaries.
+**Problem Statement:** An AI-Powered Safety Device.
+**Contact:** awarespan@bchbenjamin.in
+**Evaluation Target:** Raspberry Pi 5 (4 GB RAM)
 
 ---
 
@@ -24,7 +24,7 @@ This outputs the active node IP addresses, volunteer portal URL, and active AI m
    - **SSID:** `AWARESPAN-AP` (or the existing local LAN)
    - **Password:** `awarespan123`
 2. Open the mobile web browser and navigate to:
-   - **Hotspot URL:** `https://192.168.4.1:8443/`  
+   - **Hotspot URL:** `https://192.168.4.1:8443/`
    - *(or LAN URL if on Ethernet router: `https://192.168.0.125:8443/`)*
 3. Acknowledge the self-signed TLS prompt (**Advanced** $\rightarrow$ **Proceed**).
 

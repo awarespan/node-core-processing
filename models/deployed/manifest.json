@@ -12,27 +12,135 @@
       "sha256": "e817da6a6bd08861095bf456f10bbad19dc3eda46669282fc266ddc47dca3e34",
       "framework": "ultralytics_yolov8",
       "modality": "visual",
-      "supported_classes": ["weapon.firearm.handgun", "weapon.edged.knife"]
+      "supported_classes": [
+        "weapon.firearm.handgun",
+        "weapon.edged.knife"
+      ],
+      "enabled": true,
+      "deployment_profiles": [
+        "pi5_edge"
+      ],
+      "allowed_labels": [
+        "gun",
+        "knife"
+      ],
+      "imgsz": 640,
+      "confidence_threshold": 0.45,
+      "validation_status": "existing_production_checkpoint"
     },
     {
       "model_id": "awarespan-general-yolov8n",
       "version": "1.0.0",
-      "role": "fauna_and_perimeter_detection",
+      "role": "person_and_dog_presence_detection",
       "artifact_path": "yolov8n.pt",
       "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
       "framework": "ultralytics_yolov8",
       "modality": "visual",
-      "supported_classes": ["animal.wildlife.general", "animal.wildlife.predator", "weapon.edged.knife"]
+      "supported_classes": [
+        "human.presence.person",
+        "animal.companion.dog"
+      ],
+      "enabled": true,
+      "deployment_profiles": [
+        "pi5_edge"
+      ],
+      "allowed_labels": [
+        "person",
+        "dog"
+      ],
+      "imgsz": 416,
+      "confidence_threshold": 0.4,
+      "validation_status": "local_pretrained_baseline_field_validation_pending"
     },
     {
       "model_id": "awarespan-yamnet-audio",
       "version": "1.0.0",
       "role": "acoustic_threat_detection",
       "artifact_path": "models/working/audio/yamnet.h5",
-      "sha256": "13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744",
+      "sha256": "",
       "framework": "yamnet_acoustic_dsp",
       "modality": "acoustic",
-      "supported_classes": ["audio.threat.gunshot", "audio.threat.scream", "audio.threat.glass_break", "audio.threat.alarm"]
+      "supported_classes": [
+        "audio.threat.gunshot",
+        "audio.threat.scream",
+        "audio.threat.glass_break",
+        "audio.threat.alarm"
+      ],
+      "enabled": false,
+      "deployment_profiles": [],
+      "validation_status": "disabled_weights_not_present",
+      "notes": "No YAMNet weight artifact is present. The runtime DSP heuristic is not a substitute for trained audio inference."
+    }
+  ],
+  "profiles": {
+    "pi5_edge": {
+      "description": "Current on-device profile for Raspberry Pi 5 CPU inference.",
+      "execution_target": "edge",
+      "device": "cpu",
+      "model_ids": [
+        "awarespan-weapon-yolov8n",
+        "awarespan-general-yolov8n"
+      ],
+      "max_concurrent_visual_models": 1,
+      "audio_enabled": false,
+      "video_action_enabled": false,
+      "remote_fallback_enabled": false
+    },
+    "cloud_full": {
+      "description": "Future cloud profile for larger multimodal specialist models.",
+      "execution_target": "cloud",
+      "status": "planned_not_active",
+      "planned_model_ids": [
+        "awarespan-weapon-yolov8l",
+        "awarespan-general-yolov8m",
+        "awarespan-human-video-actions",
+        "awarespan-audio-events",
+        "awarespan-fire-smoke"
+      ],
+      "max_concurrent_visual_models": null,
+      "audio_enabled": true,
+      "video_action_enabled": true,
+      "note": "Planning contract only. No cloud inference provider or remote model executor is implemented; this profile must not be selected at runtime.",
+      "execution_enabled": false
+    }
+  },
+  "planned_models": [
+    {
+      "model_id": "awarespan-weapon-yolov8l",
+      "modality": "visual",
+      "task": "object_detection",
+      "status": "planned_not_acquired",
+      "target_profile": "cloud_full",
+      "purpose": "Higher-capacity weapon detector; retain a compact weapon detector on Pi."
+    },
+    {
+      "model_id": "awarespan-general-yolov8m",
+      "modality": "visual",
+      "task": "object_detection",
+      "status": "planned_not_acquired",
+      "target_profile": "cloud_full",
+      "purpose": "Higher-capacity person and animal detector; retain person/dog baseline on Pi."
+    },
+    {
+      "model_id": "awarespan-human-video-actions",
+      "modality": "video",
+      "task": "temporal_action_recognition",
+      "status": "dataset_and_adapter_pending",
+      "target_profile": "cloud_full"
+    },
+    {
+      "model_id": "awarespan-audio-events",
+      "modality": "audio",
+      "task": "audio_event_classification",
+      "status": "weights_and_dataset_pending",
+      "target_profile": "cloud_full"
+    },
+    {
+      "model_id": "awarespan-fire-smoke",
+      "modality": "visual",
+      "task": "object_detection",
+      "status": "planned_not_acquired",
+      "target_profile": "cloud_full"
     }
   ]
 }

@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "person-dog-presence",
+  "name": "Person and Dog Presence Detection",
+  "modality": "visual",
+  "task": "object_detection",
+  "format": "ultralytics_yolo",
+  "status": "WAITING_FOR_LOCAL_DATASET",
+  "local_data_yaml": "datasets/registered/person_dog_detection/data.yaml",
+  "classes": [
+    {
+      "id": 0,
+      "name": "person",
+      "taxonomy_id": "human.presence.person"
+    },
+    {
+      "id": 1,
+      "name": "dog",
+      "taxonomy_id": "animal.companion.dog"
+    }
+  ],
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "license": "REQUIRED_BEFORE_TRAINING",
+  "source": "OPERATOR_SUPPLIED_OR_APPROVED_UPSTREAM",
+  "download_policy": "manual_only_no_automatic_download",
+  "notes": "Use for future fine-tuning. Current inference bootstrap uses the repository-local COCO-pretrained yolov8n.pt and filters to person/dog."
+}

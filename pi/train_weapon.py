@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-"""
-[COMPATIBILITY SHIM]
-This script has moved to ml_pipeline/training/train_weapon.py as part of the modular architecture.
-Forwarding imports to ml_pipeline.training.train_weapon...
-"""
-
-import sys
-import os
-
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
-
-from ml_pipeline.training.train_weapon import *
+"""Compatibility shim for the manifest-driven Pi training runner."""
+from ml_pipeline.training.train_from_manifest import main
 
 if __name__ == "__main__":
-    train_weapon()
+    main()

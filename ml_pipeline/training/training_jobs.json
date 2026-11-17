@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "execution_policy": {
+    "training_host": "raspberry_pi_for_current_phase",
+    "download_datasets": false,
+    "download_weights": false,
+    "output_root": "models/working/training_runs",
+    "require_explicit_execute_flag": true,
+    "require_ml_training_enabled": true,
+    "never_overwrite_deployed_weights": true
+  },
+  "jobs": {
+    "weapon_finetune_pi": {
+      "status": "WAITING_FOR_LABEL_MAPPING",
+      "modality": "visual",
+      "task": "object_detection",
+      "dataset_manifest": "datasets/manifests/weapon_detection_existing.json",
+      "data_yaml": "Samples/weapon-detection-1/data.yaml",
+      "base_weights": "shared/models/yolov8n_best_weapon.pt",
+      "epochs": 40,
+      "imgsz": 416,
+      "batch": 1,
+      "workers": 0,
+      "device": "cpu",
+      "notes": "The currently checked-in sample data.yaml declares one class named weapon. Create an audited local two-class mapping/conversion before setting TRAINING_ELIGIBLE.",
+      "target_classes": [
+        "gun",
+        "knife"
+      ]
+    },
+    "person_dog_finetune_pi": {
+      "status": "WAITING_FOR_DATASET",
+      "modality": "visual",
+      "task": "object_detection",
+      "dataset_manifest": "datasets/manifests/person_dog_detection.json",
+      "data_yaml": "datasets/registered/person_dog_detection/data.yaml",
+      "base_weights": "yolov8n.pt",
+      "epochs": 50,
+      "imgsz": 416,
+      "batch": 1,
+      "workers": 0,
+      "device": "cpu",
+      "notes": "Wait for an approved local dataset with exactly mapped person and dog labels. Current inference baseline already uses the local COCO-pretrained detector.",
+      "target_classes": [
+        "person",
+        "dog"
+      ]
+    },
+    "audio_events_future": {
+      "status": "BLOCKED_ADAPTER_AND_DATASET",
+      "modality": "audio",
+      "task": "audio_event_classification",
+      "dataset_manifest": "datasets/manifests/audio_events.json",
+      "trainer": "audio_trainer_adapter_required"
+    },
+    "human_video_actions_future": {
+      "status": "BLOCKED_TEMPORAL_ADAPTER_AND_DATASET",
+      "modality": "video",
+      "task": "temporal_action_recognition",
+      "dataset_manifest": "datasets/manifests/human_video_actions.json",
+      "trainer": "video_action_trainer_adapter_required"
+    }
+  }
+}

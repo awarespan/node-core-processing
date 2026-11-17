@@ -1,6 +1,6 @@
 """
 AWARESPAN — Audio Threat Adapter
-Provides acoustic event detection for gunshots, screams, glass breakage, and alarms.
+Provides a rule-based spectral DSP baseline; this is not a trained YAMNet model.
 
 Project: AWARESPAN
 Tagline: Awareness Without Boundaries.
@@ -23,11 +23,11 @@ log = get_logger("ml_pipeline.adapters.audio")
 
 
 class AudioThreatAdapter(ThreatModelAdapter):
-    """Adapter for acoustic threat detection and sound event classification."""
+    """Rule-based acoustic baseline adapter; learned audio weights need a dedicated adapter."""
 
     def __init__(
         self,
-        model_id: str = "awarespan-yamnet-audio",
+        model_id: str = "awarespan-audio-dsp-baseline",
         model_version: str = "1.0.0",
         taxonomy_version: str = "1.0.0",
     ):
@@ -39,31 +39,16 @@ class AudioThreatAdapter(ThreatModelAdapter):
         self.class_map: Dict[int, str] = {}
 
     def load(self, artifact_path: str, config: Optional[Dict[str, Any]] = None) -> bool:
-        """Load acoustic model weights (Keras .h5, ONNX, TFLite, or built-in spectral analyzer)."""
+        """Activate the built-in DSP baseline; learned model weights are not supported here."""
         self.config = config or {}
         self.sample_rate = int(self.config.get("sample_rate", 16000))
         self.confidence_threshold = float(self.config.get("confidence_threshold", 0.50))
-        self.artifact_path = artifact_path
-
-        # If artifact exists (e.g. yamnet.h5), attempt to load with keras/tensorflow or fallback
-        if os.path.isfile(artifact_path):
-            try:
-                if artifact_path.endswith(".h5"):
-                    try:
-                        import keras
-                        self.model = keras.models.load_model(artifact_path, compile=False)
-                    except Exception:
-                        try:
-                            import tf_keras as keras
-                            self.model = keras.models.load_model(artifact_path, compile=False)
-                        except Exception:
-                            import tensorflow as tf
-                            self.model = getattr(tf, "keras", tf).models.load_model(artifact_path, compile=False)
-                    log.info("Loaded Keras acoustic model from %s", artifact_path)
-            except Exception as exc:
-                log.warning("Could not load Keras model (%s); falling back to DSP acoustic analyzer: %s", artifact_path, exc)
-                self.model = None
-
+        if artifact_path not in ("", "builtin://spectral-dsp", "builtin://audio-dsp-baseline"):
+            log.error("The DSP baseline does not load learned weights; use a dedicated trained-audio adapter")
+            self.is_loaded = False
+            return False
+        self.artifact_path = "builtin://spectral-dsp"
+        self.model = None
         self.is_loaded = True
         return True
 
@@ -194,8 +179,9 @@ class AudioThreatAdapter(ThreatModelAdapter):
         return {
             "model_id": self.model_id,
             "model_version": self.model_version,
-            "framework": "yamnet_acoustic_dsp",
+            "framework": "spectral_dsp_heuristic",
             "artifact_path": self.artifact_path,
+            "trained_model": False,
             "sample_rate": self.sample_rate,
             "confidence_threshold": self.confidence_threshold,
             "is_loaded": self.is_loaded,

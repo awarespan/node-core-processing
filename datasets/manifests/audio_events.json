@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "audio-events",
+  "name": "AWARESPAN Acoustic Events Dataset",
+  "modality": "audio",
+  "task": "audio_event_classification",
+  "format": "wav_or_pcm_segments",
+  "status": "PLANNED_DATASET_NOT_PRESENT",
+  "local_root": "datasets/registered/audio_events/",
+  "classes": [
+    "dog_bark",
+    "human_scream",
+    "distress_call",
+    "glass_break",
+    "gunshot",
+    "alarm",
+    "background_noise"
+  ],
+  "sample_rate_hz": 16000,
+  "channels": 1,
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "license": "REQUIRED_BEFORE_TRAINING",
+  "source": "OPERATOR_SUPPLIED_OR_APPROVED_UPSTREAM",
+  "download_policy": "manual_only_no_automatic_download",
+  "notes": "Audio adapter and model weights must be verified before this job can be enabled. Include diverse negative/background recordings."
+}

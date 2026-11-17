@@ -17,7 +17,10 @@
       "task": "object_detection",
       "input_requirements": {
         "format": "RGB",
-        "resolution": [640, 640],
+        "resolution": [
+          640,
+          640
+        ],
         "channels": 3
       },
       "output_schema_version": "1.0.0",
@@ -30,7 +33,10 @@
         "source_url": "https://github.com/awarespan/node-core-processing"
       },
       "evaluation_summary": {
-        "target_classes": ["gun", "knife"],
+        "target_classes": [
+          "gun",
+          "knife"
+        ],
         "fitness": 0.33656,
         "input_imgsz": 640
       },
@@ -44,7 +50,7 @@
       "version": "1.0.0",
       "display_name": "AWARESPAN Weapon Peak Benchmark Epoch 80",
       "artifact_path": "artifacts/model-checkpoints/recovered/epoch80_best_map.pt",
-      "sha256": "ac06e9281a7f20208549e739b9b1dd4f20e426b209d12027ac9122d920c80c90",
+      "sha256": "",
       "framework": "ultralytics_yolov8",
       "supported_classes": [
         "weapon.firearm.handgun",
@@ -54,12 +60,15 @@
       "task": "object_detection",
       "input_requirements": {
         "format": "RGB",
-        "resolution": [416, 416],
+        "resolution": [
+          416,
+          416
+        ],
         "channels": 3
       },
       "output_schema_version": "1.0.0",
       "taxonomy_version": "1.0.0",
-      "state": "APPROVED",
+      "state": "DISCOVERED",
       "license_info": {
         "license_name": "Internal / AWARESPAN",
         "redistributable": true,
@@ -68,7 +77,7 @@
       },
       "evaluation_summary": {
         "epoch": 80,
-        "precision": 0.84800,
+        "precision": 0.848,
         "recall": 0.72536,
         "mAP50": 0.81557,
         "mAP50_95": 0.60915,
@@ -76,7 +85,9 @@
       },
       "metadata": {
         "training_dataset": "unified_weapon_dataset",
-        "status": "candidate_for_deployment"
+        "status": "REFERENCED_ARTIFACT_MISSING",
+        "deployment_eligible": false,
+        "note": "The declared checkpoint is not present in this repository checkout. Reintroduce and checksum it before any evaluation or deployment."
       }
     },
     "awarespan-general-yolov8n:1.0.0": {
@@ -87,15 +98,17 @@
       "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
       "framework": "ultralytics_yolov8",
       "supported_classes": [
-        "animal.wildlife.general",
-        "animal.wildlife.predator",
-        "weapon.edged.knife"
+        "human.presence.person",
+        "animal.companion.dog"
       ],
       "modality": "visual",
       "task": "object_detection",
       "input_requirements": {
         "format": "RGB",
-        "resolution": [640, 640],
+        "resolution": [
+          640,
+          640
+        ],
         "channels": 3
       },
       "output_schema_version": "1.0.0",
@@ -112,7 +125,15 @@
         "coco_mAP50_95": 0.373
       },
       "metadata": {
-        "domain": "animal_and_general_detection"
+        "domain": "animal_and_general_detection",
+        "runtime_profile": "pi5_edge",
+        "runtime_mode": "provisional_baseline",
+        "allowed_labels": [
+          "person",
+          "dog"
+        ],
+        "field_validation": "pending_on_raspberry_pi",
+        "artifact_sha256_verified_in_repository": true
       }
     },
     "awarespan-yamnet-audio:1.0.0": {
@@ -120,7 +141,7 @@
       "version": "1.0.0",
       "display_name": "AWARESPAN Acoustic Threat Classifier YAMNet",
       "artifact_path": "models/working/audio/yamnet.h5",
-      "sha256": "13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744",
+      "sha256": "",
       "framework": "yamnet_acoustic_dsp",
       "supported_classes": [
         "audio.threat.gunshot",
@@ -137,7 +158,7 @@
       },
       "output_schema_version": "1.0.0",
       "taxonomy_version": "1.0.0",
-      "state": "LOADED",
+      "state": "DISCOVERED",
       "license_info": {
         "license_name": "Apache-2.0",
         "redistributable": true,
@@ -149,7 +170,10 @@
         "dataset": "AudioSet"
       },
       "metadata": {
-        "domain": "acoustic_threats"
+        "domain": "acoustic_threats",
+        "status": "BLOCKED_WEIGHTS_NOT_PRESENT",
+        "runtime_enabled": false,
+        "note": "The referenced yamnet.h5 artifact is absent from this checkout. No YAMNet inference is active."
       }
     }
   }

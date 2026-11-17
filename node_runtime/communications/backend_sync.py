@@ -35,11 +35,12 @@ def build_threat_event(
     latency_ms: int = 0,
     frame_id: int = 0,
     source_id: str = "builtin",
+    event_id: Optional[str] = None,
 ) -> ThreatEvent:
     """Build a standard ThreatEvent instance."""
     now_ms = int(time.time() * 1000)
     return ThreatEvent(
-        event_id=f"evt-{now_ms}-{uuid.uuid4().hex[:6]}",
+        event_id=event_id or f"evt-{now_ms}-{uuid.uuid4().hex[:6]}",
         ts_ms=now_ms,
         tier=tier,
         labels=labels,
@@ -82,27 +83,32 @@ class IncidentQueue:
                         attempts INTEGER DEFAULT 0,
                         created_at TEXT NOT NULL,
                         last_attempt_at TEXT,
-                        status TEXT DEFAULT 'pending'
+                        status TEXT DEFAULT 'pending',
+                        metadata_json TEXT NOT NULL DEFAULT '{}'
                     )
                 """)
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(incident_queue)").fetchall()}
+                if "metadata_json" not in columns:
+                    conn.execute("ALTER TABLE incident_queue ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
                 conn.commit()
         except Exception as exc:
             log.error("Failed to initialize SQLite incident queue at %s: %s", self.db_path, exc)
 
-    def enqueue(self, event: ThreatEvent, model: str = "") -> None:
+    def enqueue(self, event: ThreatEvent, model: str = "", metadata: Optional[Dict[str, Any]] = None) -> None:
         """Enqueue an incident for deferred delivery."""
         try:
             with self._get_connection() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO incident_queue (id, event_json, model, attempts, created_at, status)
-                    VALUES (?, ?, ?, 0, ?, 'pending')
+                    INSERT OR REPLACE INTO incident_queue (id, event_json, model, attempts, created_at, status, metadata_json)
+                    VALUES (?, ?, ?, 0, ?, 'pending', ?)
                     """,
                     (
                         event.event_id,
                         json.dumps(event.to_dict()),
                         model,
                         datetime.now(timezone.utc).isoformat(),
+                        json.dumps(metadata or {}),
                     ),
                 )
                 conn.commit()
@@ -117,7 +123,7 @@ class IncidentQueue:
             with self._get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    SELECT id, event_json, model, attempts FROM incident_queue
+                    SELECT id, event_json, model, attempts, metadata_json FROM incident_queue
                     WHERE status = 'pending'
                     ORDER BY created_at ASC
                     LIMIT ?
@@ -144,6 +150,7 @@ class IncidentQueue:
                             "event": event,
                             "model": row["model"],
                             "attempts": row["attempts"],
+                            "metadata": json.loads(row["metadata_json"] or "{}"),
                         })
                     except Exception as err:
                         log.warning("Corrupt event in queue (id=%s): %s", row["id"], err)
@@ -229,26 +236,35 @@ class BackendSync:
         if self.api_key:
             self.headers["X-API-Key"] = self.api_key
 
-    def send_incident(self, event: ThreatEvent, model: str = "") -> bool:
+    def send_incident(self, event: ThreatEvent, model: str = "", deterrence: Optional[Dict[str, Any]] = None) -> bool:
         """Transmit incident to backend REST endpoint /api/v1/incidents."""
         if not self.api_url:
             log.debug("BACKEND_API_URL not configured; skipping REST incident sync.")
             return False
         url = f"{self.api_url}/api/v1/incidents"
-        threat_type = event.labels[0].upper() if event.labels else "UNKNOWN"
+        labels = {str(label).lower() for label in event.labels}
+        if labels & {"gun", "knife", "weapon", "pistol", "rifle"}:
+            threat_type = "WEAPON"
+            detection_domain = "WEAPON"
+        elif labels & {"dog", "cat", "horse", "cow", "sheep", "animal"}:
+            threat_type = "ANIMAL"
+            detection_domain = "ANIMAL"
+        elif labels & {"car", "motorcycle", "bus", "truck", "train", "vehicle"}:
+            threat_type = "VEHICLE"
+            detection_domain = None
+        elif "person" in labels:
+            threat_type = "SUSPICIOUS_BEHAVIOR"
+            detection_domain = "VIOLENCE"
+        else:
+            threat_type = "UNKNOWN"
+            detection_domain = "UNKNOWN"
         detection_time = datetime.fromtimestamp(event.ts_ms / 1000.0, timezone.utc).isoformat()
         threat_desc = (
             f"Detected {', '.join(event.labels)} ({event.max_confidence * 100:.1f}%)"
             if event.labels
             else "Threat detected"
         )
-        threat_severity = (
-            "CRITICAL"
-            if event.tier in ("tier1", "critical")
-            else "HIGH"
-            if event.tier in ("tier2", "high")
-            else "MEDIUM"
-        )
+        threat_severity = "HIGH" if event.tier in ("tier1", "tier2", "critical", "high") else "MEDIUM"
 
         payload = {
             "incidentId": event.event_id,
@@ -260,6 +276,9 @@ class BackendSync:
             "confidence": float(event.max_confidence),
             "detectionTime": detection_time,
             "tier": 1 if event.tier in ("tier1", "critical") else 2,
+            "modelVersion": model or event.model,
+            "detectionDomain": detection_domain,
+            "deterrence": deterrence or {},
         }
         try:
             res = requests.post(url, json=payload, headers=self.headers, timeout=5)

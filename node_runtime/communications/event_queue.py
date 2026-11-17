@@ -11,7 +11,7 @@ Contact: awarespan@bchbenjamin.in
 import logging
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from shared.logging.logger import get_logger
 from shared.models.events import ThreatEvent
@@ -64,6 +64,8 @@ class EventQueueManager:
         latency_ms: int = 0,
         frame_id: int = 0,
         source_id: str = "builtin",
+        event_id: Optional[str] = None,
+        deterrence: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Handle a newly fired threat event:
@@ -80,24 +82,25 @@ class EventQueueManager:
             latency_ms=latency_ms,
             frame_id=frame_id,
             source_id=source_id,
+            event_id=event_id,
         )
 
         sent = False
         # 1. Try MQTT
         if self.mqtt and self.mqtt.connected:
-            sent = self.mqtt.publish_incident(event, model=model)
+            sent = self.mqtt.publish_incident(event, model=model, deterrence=deterrence)
             if sent:
                 log.info("Incident %s dispatched via MQTT", event.event_id)
 
         # 2. Try REST API fallback
         if not sent and self.backend:
-            sent = self.backend.send_incident(event, model=model)
+            sent = self.backend.send_incident(event, model=model, deterrence=deterrence)
             if sent:
                 log.info("Incident %s dispatched via REST API fallback", event.event_id)
 
         # 3. Queue offline
         if not sent and self.queue:
-            self.queue.enqueue(event, model=model)
+            self.queue.enqueue(event, model=model, metadata={"deterrence": deterrence or {}})
             log.warning("Incident %s stored in offline SQLite queue", event.event_id)
 
     def _worker_loop(self) -> None:
@@ -134,10 +137,10 @@ class EventQueueManager:
             delivered = False
 
             if self.mqtt and self.mqtt.connected:
-                delivered = self.mqtt.publish_incident(event, model=model)
+                delivered = self.mqtt.publish_incident(event, model=model, deterrence=item.get("metadata", {}).get("deterrence", {}))
 
             if not delivered and self.backend:
-                delivered = self.backend.send_incident(event, model=model)
+                delivered = self.backend.send_incident(event, model=model, deterrence=item.get("metadata", {}).get("deterrence", {}))
 
             if delivered:
                 self.queue.mark_success(item["id"])

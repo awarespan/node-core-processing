@@ -63,6 +63,17 @@ def test_response_selector():
     assert actions["siren"] is True
 
 
+def test_response_selector_defaults_to_no_audio():
+    from node_runtime.processing.threat_assessment import ThreatAssessment
+    selector = ResponseSelector()
+    tier2 = ThreatAssessment("tier2", "CRITICAL", ["gun"], 0.91, True)
+    person = ThreatAssessment("tier1", "LOW", ["person"], 0.82, False)
+    dog = ThreatAssessment("tier1", "LOW", ["dog"], 0.79, False)
+    assert selector.select_response(tier2)["siren"] is False
+    assert selector.select_response(person)["siren"] is False
+    assert selector.select_response(dog)["siren"] is False
+
+
 def test_sqlite_incident_queue():
     with tempfile.TemporaryDirectory() as tmp_dir:
         db_path = str(Path(tmp_dir) / "test_queue.db")
@@ -129,3 +140,38 @@ def test_backend_sync_headers_and_endpoints(monkeypatch):
     assert inc_payload["threatSeverity"] == "CRITICAL"
     assert "T" in inc_payload["detectionTime"]  # ISO-8601 string
 
+
+
+def test_presence_audio_targets_person_but_never_dogs():
+    from node_runtime.processing.threat_assessment import ThreatAssessment
+    selector = ResponseSelector(
+        siren_enabled=True,
+        presence_deterrence_enabled=True,
+        presence_deterrence_labels={"person", "dog"},
+    )
+    person = ThreatAssessment("tier1", "LOW", ["person"], 0.82, False)
+    dog = ThreatAssessment("tier1", "LOW", ["dog"], 0.79, False)
+    cat = ThreatAssessment("tier1", "LOW", ["cat"], 0.79, False)
+    assert selector.select_response(person)["siren"] is True
+    assert selector.select_response(dog)["siren"] is False
+    assert selector.select_response(cat)["siren"] is False
+
+
+def test_presence_deterrence_respects_disabled_policy():
+    from node_runtime.processing.threat_assessment import ThreatAssessment
+    selector = ResponseSelector(
+        siren_enabled=True,
+        presence_deterrence_enabled=False,
+        presence_deterrence_labels={"person", "dog"},
+    )
+    person = ThreatAssessment("tier1", "LOW", ["person"], 0.82, False)
+    assert selector.select_response(person)["siren"] is False
+
+
+def test_build_threat_event_preserves_supplied_event_id():
+    from node_runtime.communications.backend_sync import build_threat_event
+    event = build_threat_event(
+        tier="tier1", labels=["dog"], confidence=0.88,
+        action="speaker_warning", event_id="evt-shared-123",
+    )
+    assert event.event_id == "evt-shared-123"

@@ -15,6 +15,7 @@ import json
 import signal
 import sys
 import time
+from pathlib import Path
 from collections import deque
 from dataclasses import asdict
 from typing import Deque, Dict, List, Optional, Tuple
@@ -27,6 +28,7 @@ from shared.config.settings import get_settings
 from shared.logging.logger import get_logger
 from shared.models.events import Detection, ThreatEvent
 from node_runtime.detection.visual.detector import VisualDetector
+from node_runtime.detection.visual.ensemble import build_visual_detector
 from node_runtime.processing.threat_assessment import ThreatAssessor, ThreatAssessment
 from node_runtime.processing.response_selector import ResponseSelector
 from node_runtime.deterrence.siren import DeterrenceController
@@ -47,16 +49,25 @@ class RuntimeCore:
         detector: VisualDetector,
         assessor: ThreatAssessor,
         media_router: Optional[CoreMediaRouter] = None,
+        telegram_notifier: Optional[TelegramLifecycleNotifier] = None,
     ):
         self.settings = get_settings()
         self.detector = detector
         self.assessor = assessor
         self.media_router = media_router
-        self.response_selector = ResponseSelector(siren_enabled=self.settings.siren_enabled)
+        self.telegram_notifier = telegram_notifier
         self.deterrence = DeterrenceController(
             siren_file=self.settings.siren_file,
-            enabled=self.settings.siren_enabled,
-            cooldown_sec=self.settings.cooldown_seconds,
+            # The controller reads the fail-closed SPEAKER_ENABLED/SIREN_ENABLED
+            # settings; do not hard-code an override here.
+            cooldown_sec=self.settings.deterrence_cooldown_sec,
+        )
+        self.refresh_audio_capabilities(refresh=True)
+        speaker_allowed = bool(self.deterrence.enabled)
+        self.response_selector = ResponseSelector(
+            siren_enabled=speaker_allowed,
+            presence_deterrence_enabled=self.settings.presence_deterrence_enabled,
+            presence_deterrence_labels=set(self.settings.deterrence_target_labels),
         )
         self.event_queue: Optional[EventQueueManager] = None
 
@@ -85,6 +96,39 @@ class RuntimeCore:
         }
         self._enqueue_frame(task)
 
+    def refresh_audio_capabilities(self, refresh: bool = False) -> Dict[str, object]:
+        """Detect an ALSA playback card and keep speaker ownership on the Pi."""
+        status = self.deterrence.hardware_status(refresh=refresh)
+        available = bool(status.get("available"))
+        armed = available and self.settings.siren_enabled and self.settings.speaker_enabled
+        self.deterrence.enabled = bool(armed)
+        if hasattr(self, "response_selector"):
+            self.response_selector.siren_enabled = bool(armed)
+        return {
+            "speaker_output_available": available,
+            "speaker_output_device": str(status.get("device") or ""),
+            "speaker_output_cards": status.get("cards", []),
+            "speaker_output_reason": str(status.get("reason") or "unknown"),
+            # The current node runtime does not ingest volunteer microphone audio yet.
+            # Fail closed even when no playback interface is present.
+            "browser_microphone_allowed": False,
+            "audio_owner": "raspberry_pi" if available else "none",
+        }
+
+    def capability_message(self) -> Dict[str, object]:
+        return {"type": "capabilities", "node": self.settings.node_id, **self.refresh_audio_capabilities()}
+
+    async def _dashboard_capability_loop(self, websocket) -> None:
+        """Refresh hardware ownership while a dashboard client is connected."""
+        try:
+            while True:
+                await asyncio.sleep(5)
+                await websocket.send(json.dumps(self.capability_message(), separators=(",", ":")))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return
+
     async def route_connection(self, websocket):
         """Route connection based on path."""
         path = "/"
@@ -92,7 +136,8 @@ class RuntimeCore:
             path = websocket.request.path
 
         if path == "/health":
-            await websocket.send(json.dumps({"status": "ok", "node": self.settings.node_id}))
+            await websocket.send(json.dumps({"status": "ok", "node": self.settings.node_id,
+                                             "capabilities": self.refresh_audio_capabilities()}))
             await websocket.close()
             return
         elif path == "/ingest":
@@ -104,6 +149,7 @@ class RuntimeCore:
         """Ingests raw camera/laptop frames from legacy WebSocket ingest."""
         log.info("Frame ingestion client connected")
         try:
+            await websocket.send(json.dumps(self.capability_message(), separators=(",", ":")))
             async for message in websocket:
                 try:
                     data = json.loads(message)
@@ -114,15 +160,23 @@ class RuntimeCore:
                     if "source_id" not in data:
                         data["source_id"] = "ws-ingest"
                     self._enqueue_frame(data)
+                elif mtype == "audio_chunk":
+                    await websocket.send(json.dumps({"type": "source_rejected", "source": "microphone",
+                                                     "reason": "Pi runtime audio ingestion is not enabled."}))
                 elif mtype == "ping":
                     ts = data.get("ts_ms", int(time.time() * 1000))
                     await websocket.send(json.dumps({"type": "pong", "ts_ms": ts}))
                 elif mtype == "volunteer_handshake":
                     mode = data.get("mode", "camera")
+                    caps = self.refresh_audio_capabilities()
                     if mode in ("camera", "both"):
                         await websocket.send(json.dumps({"type": "ack", "source": "camera"}))
                     if mode in ("microphone", "both"):
-                        await websocket.send(json.dumps({"type": "ack", "source": "microphone"}))
+                        reason = ("Pi audio output is attached; browser audio capture is disabled."
+                                  if caps["speaker_output_available"] else
+                                  "Pi runtime audio ingestion is not enabled.")
+                        await websocket.send(json.dumps({"type": "source_rejected", "source": "microphone",
+                                                         "reason": reason}))
         except Exception as exc:
             log.debug("Ingestion connection ended: %s", exc)
         finally:
@@ -132,7 +186,9 @@ class RuntimeCore:
         """Broadcasts annotated frames and incident logs to dashboard clients."""
         self.dashboard_clients.add(websocket)
         log.info("Dashboard client connected (active clients: %d)", len(self.dashboard_clients))
+        capability_task = asyncio.create_task(self._dashboard_capability_loop(websocket))
         try:
+            await websocket.send(json.dumps(self.capability_message(), separators=(",", ":")))
             if self.latest_frame_message:
                 await websocket.send(self.latest_frame_message)
             for event in list(self.logs)[-20:]:
@@ -142,6 +198,7 @@ class RuntimeCore:
         except Exception as exc:
             log.debug("Dashboard connection closed: %s", exc)
         finally:
+            capability_task.cancel()
             self.dashboard_clients.discard(websocket)
 
     def _enqueue_frame(self, packet: Dict) -> None:
@@ -157,6 +214,7 @@ class RuntimeCore:
         log.info("Node Runtime processor loop active")
         while True:
             packet = await self.frame_queue.get()
+            self.refresh_audio_capabilities()
             frame_id = int(packet.get("frame_id", 0))
             source_ts_ms = int(packet.get("ts_ms", 0))
             source_id = str(packet.get("source_id", "builtin"))
@@ -184,14 +242,36 @@ class RuntimeCore:
             if assessment.tier != "none" and self._cooldown_passed(now_ms):
                 actions = self.response_selector.select_response(assessment)
 
-                # Audio deterrence
+                # The Pi is the sole owner of its attached audio output.
                 action_str = "alert"
+                event_id = f"evt-{now_ms}"
+                deterrence_metadata = {"attempted": False, "started": False, "reason": "not_requested"}
                 if actions.get("siren"):
-                    if self.deterrence.trigger_siren(assessment.labels):
-                        action_str = "siren"
+                    deterrence_result = self.deterrence.trigger(assessment.labels)
+                    deterrence_metadata = {
+                        "attempted": True,
+                        "started": bool(deterrence_result.started),
+                        "status": "STARTED" if deterrence_result.started else "NOT_STARTED",
+                        "reason": deterrence_result.reason,
+                        "frequencyHz": deterrence_result.frequency_hz,
+                        "frequencyMinHz": deterrence_result.frequency_min_hz,
+                        "frequencyMaxHz": deterrence_result.frequency_max_hz,
+                        "durationSeconds": deterrence_result.duration_sec,
+                        "emissionCount": deterrence_result.emission_count,
+                        "outputDevice": deterrence_result.speaker_device,
+                        "waveform": "randomized_audible_warning_tone",
+                    }
+                    if deterrence_result.started:
+                        action_str = "speaker_warning"
+                        if self.telegram_notifier:
+                            self.telegram_notifier.notify_deterrence(
+                                labels=assessment.labels,
+                                result=deterrence_result,
+                                event_id=event_id,
+                            )
 
                 event = ThreatEvent(
-                    event_id=f"evt-{now_ms}",
+                    event_id=event_id,
                     ts_ms=now_ms,
                     tier=assessment.tier,
                     labels=assessment.labels,
@@ -204,6 +284,8 @@ class RuntimeCore:
                 )
 
                 self.logs.append(event)
+                if self.telegram_notifier:
+                    self.telegram_notifier.notify_detection_evidence(event, annotated)
                 await self._broadcast({"type": "log", "event": event.to_dict()})
                 self.last_event_ms = now_ms
 
@@ -218,6 +300,8 @@ class RuntimeCore:
                         latency_ms=latency_ms,
                         frame_id=frame_id,
                         source_id=source_id,
+                        event_id=event_id,
+                        deterrence=deterrence_metadata,
                     )
 
             # Build and broadcast annotated frame
@@ -235,7 +319,9 @@ class RuntimeCore:
                         cv2.LINE_AA,
                     )
 
-                frame_msg = self._build_frame_message(annotated, latency_ms, frame_id, source_id=source_id)
+                frame_msg = self._build_frame_message(
+                    annotated, latency_ms, frame_id, source_id=source_id, ts_ms=source_ts_ms
+                )
                 self.latest_frame_message = frame_msg
                 await self._broadcast_raw(frame_msg)
             except Exception as exc:
@@ -259,7 +345,9 @@ class RuntimeCore:
             self.frame_counter = 0
             self.fps_window_start = time.time()
 
-    def _build_frame_message(self, frame, latency_ms: int, frame_id: int, source_id: str = "builtin") -> str:
+    def _build_frame_message(
+        self, frame, latency_ms: int, frame_id: int, source_id: str = "builtin", ts_ms: int = 0
+    ) -> str:
         ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         if not ok:
             raise RuntimeError("Failed to encode frame")
@@ -267,6 +355,7 @@ class RuntimeCore:
         payload = {
             "type": "frame",
             "frame_id": frame_id,
+            "ts_ms": ts_ms,
             "source_id": source_id,
             "annotated_b64": b64,
             "latency_ms": latency_ms,
@@ -293,11 +382,19 @@ class RuntimeCore:
 
 async def run_server(args: argparse.Namespace) -> None:
     settings = get_settings()
-    detector = VisualDetector(
-        model_path=args.model or settings.default_model,
-        imgsz=args.imgsz,
-        confidence=args.conf or settings.confidence_threshold,
-    )
+    if args.model:
+        detector = VisualDetector(
+            model_path=args.model,
+            imgsz=args.imgsz,
+            confidence=args.conf or settings.confidence_threshold,
+        )
+    else:
+        detector = build_visual_detector(
+            manifest_path=Path(settings.ml_deployment_manifest),
+            profile=settings.ml_deployment_profile,
+            imgsz=args.imgsz,
+            confidence=args.conf,
+        )
     assessor = ThreatAssessor()
 
     # Core media router
@@ -308,7 +405,7 @@ async def run_server(args: argparse.Namespace) -> None:
     telegram_notifier.start()
     media_router.registry.state_machine.add_listener(telegram_notifier.on_source_transition)
 
-    core = RuntimeCore(detector, assessor, media_router=media_router)
+    core = RuntimeCore(detector, assessor, media_router=media_router, telegram_notifier=telegram_notifier)
 
     # Communications / SQLite event queue
     eq = EventQueueManager(heartbeat_interval=30)

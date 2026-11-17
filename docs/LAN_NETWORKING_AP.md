@@ -1,10 +1,10 @@
 # AWARESPAN — LAN-First Networking & Autonomous Wi-Fi AP Guide
 
-**Project:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Problem Statement:** An AI-Powered Safety Device.  
-**Contact:** awarespan@bchbenjamin.in  
-**Target:** Raspberry Pi 5 (4 GB RAM), Bookworm / Debian 12  
+**Project:** AWARESPAN
+**Tagline:** Awareness Without Boundaries.
+**Problem Statement:** An AI-Powered Safety Device.
+**Contact:** awarespan@bchbenjamin.in
+**Target:** Raspberry Pi 5 (4 GB RAM), Bookworm / Debian 12
 
 ---
 

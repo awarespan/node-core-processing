@@ -11,6 +11,8 @@ Contact: awarespan@bchbenjamin.in
 import json
 import ssl
 import time
+import threading
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -50,6 +52,9 @@ class PiMqttClient:
         self.topic_commands = f"sip/{self.node_id}/commands"
         self.topic_heartbeat = f"sip/{self.node_id}/heartbeat"
         self.topic_telemetry = f"sip/{self.node_id}/telemetry"
+        self.topic_ack = f"sip/{self.node_id}/ack"
+        self._pending_incident_acks: Dict[str, Dict[str, Any]] = {}
+        self._pending_ack_lock = threading.Lock()
 
     def connect(self) -> bool:
         """Establish connection to MQTT broker."""
@@ -106,8 +111,9 @@ class PiMqttClient:
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self.connected = True
-            log.info("MQTT connected successfully to broker (rc=0). Subscribing to %s", self.topic_commands)
+            log.info("MQTT connected successfully to broker (rc=0). Subscribing to command and incident acknowledgement topics")
             client.subscribe(self.topic_commands, qos=1)
+            client.subscribe(self.topic_ack, qos=1)
         else:
             self.connected = False
             log.warning("MQTT connection failed with code %d", rc)
@@ -117,36 +123,83 @@ class PiMqttClient:
         log.warning("MQTT disconnected (rc=%d)", rc)
 
     def _on_message(self, client, userdata, msg):
-        log.info("MQTT message received on %s: %s", msg.topic, msg.payload[:100])
-        if self.on_command:
-            try:
-                data = json.loads(msg.payload.decode("utf-8"))
+        log.info("MQTT message received on %s", msg.topic)
+        try:
+            data = json.loads(msg.payload.decode("utf-8"))
+            if msg.topic == self.topic_ack:
+                incident_id = str(data.get("incidentId", ""))
+                with self._pending_ack_lock:
+                    pending = self._pending_incident_acks.get(incident_id)
+                if pending is not None:
+                    pending["success"] = bool(data.get("success", False))
+                    pending["event"].set()
+                else:
+                    log.debug("Received backend acknowledgement for non-pending incident %s", incident_id)
+                return
+            if self.on_command:
                 self.on_command(data)
-            except Exception as exc:
-                log.warning("Error parsing incoming MQTT command: %s", exc)
+        except Exception as exc:
+            log.warning("Error parsing incoming MQTT message: %s", exc)
 
-    def publish_incident(self, event: ThreatEvent, model: str = "") -> bool:
-        """Publish threat incident to sip/{nodeId}/incidents."""
+    def publish_incident(self, event: ThreatEvent, model: str = "", deterrence: Optional[Dict[str, Any]] = None) -> bool:
+        """Publish a backend-compatible incident payload to sip/{nodeId}/incidents."""
         if not self.connected or not self._client:
             return False
+        labels = [str(label).lower() for label in event.labels]
+        if set(labels) & {"gun", "knife", "weapon", "pistol", "rifle"}:
+            threat_type, detection_domain = "WEAPON", "WEAPON"
+        elif set(labels) & {"dog", "cat", "horse", "cow", "sheep", "animal"}:
+            threat_type, detection_domain = "ANIMAL", "ANIMAL"
+        elif set(labels) & {"car", "motorcycle", "bus", "truck", "train", "vehicle"}:
+            threat_type, detection_domain = "VEHICLE", None
+        elif "person" in labels:
+            threat_type, detection_domain = "SUSPICIOUS_BEHAVIOR", "VIOLENCE"
+        else:
+            threat_type, detection_domain = "UNKNOWN", "UNKNOWN"
+        severity = "HIGH" if event.tier in ("tier1", "tier2", "critical", "high") else "MEDIUM"
+        detection_time = datetime.fromtimestamp(event.ts_ms / 1000.0, timezone.utc).isoformat()
         payload = {
+            "incidentId": event.event_id,
+            "idempotencyKey": event.event_id,
             "nodeId": self.node_id,
-            "eventId": event.event_id,
-            "tier": event.tier,
-            "labels": event.labels,
-            "maxConfidence": event.max_confidence,
-            "action": event.action,
-            "latencyMs": event.latency_ms,
-            "frameId": event.frame_id,
-            "model": model or event.model,
-            "timestamp": event.ts_ms,
+            "threatType": threat_type,
+            "threatSeverity": severity,
+            "threatDescription": f"Detected {', '.join(event.labels)} ({event.max_confidence * 100:.1f}%)",
+            "confidence": float(event.max_confidence),
+            "detectionTime": detection_time,
+            "tier": 1 if event.tier in ("tier1", "critical") else 2,
+            "modelVersion": model or event.model,
+            "detectionDomain": detection_domain,
+            "deterrence": deterrence or {},
         }
+        pending = {"event": threading.Event(), "success": False}
+        with self._pending_ack_lock:
+            self._pending_incident_acks[event.event_id] = pending
         try:
             info = self._client.publish(self.topic_incidents, json.dumps(payload), qos=1)
-            return info.rc == mqtt.MQTT_ERR_SUCCESS
+            if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                return False
+            # Broker PUBACK is transport-level only; wait for the backend's
+            # application ACK emitted after database ingestion commits.
+            if hasattr(info, "wait_for_publish"):
+                info.wait_for_publish(timeout=1.5)
+            if hasattr(info, "is_published") and not info.is_published():
+                log.warning("MQTT broker did not confirm publish for incident %s", event.event_id)
+                return False
+            if not pending["event"].wait(timeout=2.0):
+                log.warning("Backend database acknowledgement timed out for incident %s; falling back to REST", event.event_id)
+                return False
+            if not pending["success"]:
+                log.warning("Backend rejected incident %s; falling back to REST", event.event_id)
+                return False
+            log.info("Backend confirmed database ingestion for incident %s via MQTT", event.event_id)
+            return True
         except Exception as exc:
-            log.warning("Failed to publish incident via MQTT: %s", exc)
+            log.warning("Failed to publish/confirm incident via MQTT: %s", exc)
             return False
+        finally:
+            with self._pending_ack_lock:
+                self._pending_incident_acks.pop(event.event_id, None)
 
     def publish_heartbeat(self, extra: Optional[Dict[str, Any]] = None) -> bool:
         """Publish heartbeat to sip/{nodeId}/heartbeat."""

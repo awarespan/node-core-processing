@@ -36,10 +36,12 @@ class VisualDetector:
         model_path: Optional[str] = None,
         imgsz: int = 640,
         confidence: Optional[float] = None,
+        allowed_labels: Optional[set[str]] = None,
     ):
         settings = get_settings()
         self.imgsz = imgsz
         self.conf = confidence if confidence is not None else settings.confidence_threshold
+        self.allowed_labels = {label.strip().lower() for label in (allowed_labels or set())}
         self.model_path = self._resolve_model_path(model_path or settings.default_model)
 
         self.model = None
@@ -128,6 +130,8 @@ class VisualDetector:
 
                 for box, cls_id, conf in zip(xyxy.tolist(), cls_list.tolist(), conf_list.tolist()):
                     label = self.model.names.get(int(cls_id), str(cls_id))
+                    if self.allowed_labels and str(label).strip().lower() not in self.allowed_labels:
+                        continue
                     detections.append(
                         Detection(
                             label=str(label),

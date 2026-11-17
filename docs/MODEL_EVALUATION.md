@@ -1,50 +1,51 @@
-# AWARESPAN Model Evaluation & Benchmark Report
+# AWARESPAN Model Evaluation & Benchmark Record
 
-**Project:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Official Problem Statement:** An AI-Powered Safety Device.  
-**Contact:** awarespan@bchbenjamin.in  
+## 1. Scope and evidence status
 
----
+This document preserves historical performance figures that were recorded in earlier project notes. They were **not independently reproduced in the current Box workspace**. The Pi is not connected to this Box session, and the historical epoch-80 checkpoint is not present in the cloned repository. Treat the figures below as historical claims to revalidate, not as current acceptance results.
 
-## 1. Historical Benchmark Verification: Epoch 80 Peak
+## 2. Historical weapon checkpoint report
 
-A landmark training checkpoint was previously reported with an mAP50 of **0.8156**. We conducted an independent forensic inspection of the training artifacts, recovering the full training run log at `/home/benjamin/runs/detect/train/results.csv` and the weights file at `/home/benjamin/runs/detect/train/weights/epoch80.pt` (preserved locally at `artifacts/model-checkpoints/recovered/epoch80_best_map.pt`).
+An earlier report recorded the following epoch-80 metrics for `awarespan-weapon-yolov8n-epoch80`:
 
-### Verified Metrics at Epoch 80:
+| Metric | Historical reported value | Current verification status |
+|---|---:|---|
+| mAP@50 | 0.81557 | Not revalidated; checkpoint absent from this checkout |
+| mAP@50–95 | 0.60915 | Not revalidated; checkpoint absent from this checkout |
+| Precision | 0.84800 | Not revalidated; checkpoint absent from this checkout |
+| Recall | 0.72536 | Not revalidated; checkpoint absent from this checkout |
 
-| Metric | Verified Value | Historical Report | Status |
-| :--- | :---: | :---: | :---: |
-| **mAP@50 (B)** | **0.81557** | **0.8156** | **CONFIRMED EXACT MATCH** |
-| **mAP@50-95 (B)** | **0.60915** | — | Verified from logs |
-| **Precision (B)** | **0.84800** | — | Verified from logs |
-| **Recall (B)** | **0.72536** | — | Verified from logs |
-| **Train Box Loss** | 0.56389 | — | Verified from logs |
-| **Train Cls Loss** | 0.78875 | — | Verified from logs |
-| **Val Box Loss** | 0.83530 | — | Verified from logs |
-| **Val Cls Loss** | 0.83138 | — | Verified from logs |
+The earlier note referenced a `unified_weapon_dataset` training corpus and a `416x416` input size. The weight file `artifacts/model-checkpoints/recovered/epoch80_best_map.pt` is not present under the current repository clone, so its checksum, class map, loading behaviour and metrics cannot be verified here. It is therefore marked `DISCOVERED`, not approved or deployed.
 
-### Model Checkpoint Provenance:
-- **File Name:** `epoch80_best_map.pt`
-- **File Size:** 12,330,111 bytes (11.76 MB)
-- **SHA-256 Checksum:** `ac06e9281a7f20208549e739b9b1dd4f20e426b209d12027ac9122d920c80c90`
-- **Training Dataset:** `unified_weapon_dataset` (Classes: `gun`, `knife`)
-- **Input Resolution:** `416x416`
-- **Total Planned Epochs:** 150 (peak performance achieved at epoch 80)
+## 3. Current Pi profile
 
----
+The current `pi5_edge` profile uses two repository-local artifacts:
 
-## 2. Multi-Model Edge Benchmark Comparison (Raspberry Pi 5)
+| Model | Artifact | Allowed labels | Current status |
+|---|---|---|---|
+| Weapon detector | `shared/models/yolov8n_best_weapon.pt` | `gun`, `knife` | Existing production checkpoint; checksum matches manifest |
+| General detector | `yolov8n.pt` | `person`, `dog` | Provisional COCO baseline; Pi camera validation pending |
 
-Target hardware: Raspberry Pi 5 Model B Rev 1.1, 4 GB RAM, 64-bit OS.
+Both artifact checksums were verified against `models/deployed/manifest.json`. This verifies file identity only; it does not prove successful model loading or real-time performance on the Pi.
 
-| Model Candidate | Resolution | Mean Latency | Median Latency | p95 Latency | Throughput (FPS) | Peak RAM (RSS) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **YOLOv8n Weapon (Epoch 80)** | `416x416` | **48.2 ms** | **47.5 ms** | **54.1 ms** | **20.7 FPS** | **245 MB** |
-| **YOLOv8n Weapon (Production)** | `640x640` | **74.6 ms** | **73.2 ms** | **82.0 ms** | **13.4 FPS** | **282 MB** |
-| **YOLOv8n General / Fauna** | `640x640` | **76.1 ms** | **75.0 ms** | **83.5 ms** | **13.1 FPS** | **288 MB** |
-| **YAMNet Acoustic Threat Classifier** | `16kHz PCM` | **12.4 ms** | **11.8 ms** | **15.2 ms** | **80.6 FPS** | **85 MB** |
-| **Concurrent (Visual + Acoustic)** | Multi | **88.2 ms** | **86.4 ms** | **98.0 ms** | **11.3 FPS** | **342 MB** |
+## 4. Audio and video status
 
-### Benchmark Takeaway:
-Operating the peak weapon model (`epoch80_best_map.pt`) at `416x416` provides a **35% reduction in latency** (48.2 ms vs 74.6 ms) and a **54% increase in frame throughput** (20.7 FPS vs 13.4 FPS) while delivering superior precision (`0.8480`) and mAP50 (`0.8156`).
+- The YAMNet weight file referenced by the registry is absent. YAMNet is not active in the Pi deployment profile.
+- `AudioThreatAdapter` is a rule-based spectral DSP baseline, not a trained audio neural network.
+- `TemporalVideoAdapter` defines a future sequence-level interface only. No temporal action model weights or training dataset are present.
+
+## 5. Required re-benchmark on the Raspberry Pi
+
+When the Pi is available, capture a new report containing:
+
+1. Pi model, OS, Python, Ultralytics, PyTorch and OpenCV versions.
+2. Exact Git commit and model SHA-256 values.
+3. Actual model load result and class names.
+4. Warm-up count and measured sample count.
+5. Mean, median, p95 latency and achieved FPS for each model independently.
+6. Combined sequential profile latency and peak RSS.
+7. CPU temperature, throttling and undervoltage observations.
+8. Person/dog precision and recall on a locally held-out, labelled set, including difficult negatives.
+9. False deterrence rate and speaker output verification after hardware installation.
+
+Do not promote the person/dog baseline to a safety-validated model until camera validation and representative evaluation are complete. Do not use the historical epoch-80 figures as evidence for the currently deployed weapon checkpoint.

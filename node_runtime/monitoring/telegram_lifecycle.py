@@ -9,6 +9,7 @@ Contact: awarespan@bchbenjamin.in
 """
 
 import os
+import html
 import sqlite3
 import threading
 import time
@@ -17,7 +18,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from node_runtime.media.sources.source import MediaSource, SourceOrigin, SourceState, SourceType
-from node_runtime.monitoring.telegram_notify import send_message
+from node_runtime.monitoring.telegram_notify import send_message, send_photo
 from shared.config.settings import get_settings
 from shared.logging.logger import get_logger
 
@@ -29,7 +30,7 @@ class TelegramLifecycleNotifier:
 
     def __init__(self, db_path: Optional[str] = None):
         settings = get_settings()
-        self.node_name = "Raspberry Pi 5"
+        self.node_name = f"Raspberry Pi 5 ({settings.node_id})" if settings.node_id else "Raspberry Pi 5"
         self.db_path = db_path or getattr(settings, "telegram_queue_path", "state/telegram_queue.db")
 
         # Ensure directory exists
@@ -142,6 +143,71 @@ class TelegramLifecycleNotifier:
             f"Time: {now_str}"
         )
         self.dispatch_or_queue(msg)
+
+    def notify_deterrence(self, labels: List[str], result, event_id: str = "") -> None:
+        """Notify operators only after speaker playback was actually started."""
+        if not getattr(result, "started", False):
+            return
+        detected = ", ".join(sorted({str(label).strip() for label in labels if str(label).strip()})) or "Presence detected"
+        selected = getattr(result, "frequency_hz", None)
+        frequency = f"{float(selected):.0f} Hz (randomly selected)" if selected is not None else "not reported"
+        emission = int(getattr(result, "emission_count", 0))
+        duration = float(getattr(result, "duration_sec", 0.0))
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        msg = (
+            f"<b>AWARESPAN | SPEAKER DETERRENCE</b>\n"
+            f"Node: {self.node_name}\n"
+            f"Detected: {detected}\n"
+            f"Emission: #{emission}\n"
+            f"Frequency: {frequency}\n"
+            f"Duration: {duration:.2f}s\n"
+            f"Playback: Started\n"
+            f"Event: <code>{event_id or 'not_assigned'}</code>\n"
+            f"Time: {timestamp}\n"
+            f"<i>Nominal signal frequency; acoustic sound pressure is not measured.</i>"
+        )
+        self.dispatch_or_queue(msg)
+
+    def notify_detection_evidence(self, event, annotated_frame) -> None:
+        """Send the Pi-annotated detection frame to Telegram without blocking inference."""
+        try:
+            import cv2
+            ok, encoded = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 68])
+            if not ok:
+                log.warning("Could not encode annotated detection evidence for Telegram")
+                return
+            image_bytes = encoded.tobytes()
+            labels = html.escape(", ".join(getattr(event, "labels", []) or []) or "Threat detected")
+            confidence = float(getattr(event, "max_confidence", 0.0))
+            timestamp = datetime.fromtimestamp(float(getattr(event, "ts_ms", time.time() * 1000)) / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            tier = html.escape(str(getattr(event, "tier", "unknown")))
+            action = html.escape(str(getattr(event, "action", "alert")))
+            event_id = html.escape(str(getattr(event, "event_id", "unknown")))
+            caption = (
+                f"<b>AWARESPAN | DETECTION EVIDENCE</b>\n"
+                f"Node: {html.escape(self.node_name)}\n"
+                f"Detected: {labels}\n"
+                f"Confidence: {confidence:.1%}\n"
+                f"Tier: {tier}\n"
+                f"Action: {action}\n"
+                f"Event: <code>{event_id}</code>\n"
+                f"Time: {timestamp}\n"
+                f"<i>Bounding boxes are drawn by the Pi inference pipeline.</i>"
+            )
+        except Exception as exc:
+            log.warning("Unable to prepare detection evidence photo: %s", exc)
+            return
+
+        def deliver() -> None:
+            try:
+                if not send_photo(image_bytes, caption):
+                    # Preserve notification visibility if the media upload fails/offline.
+                    self.dispatch_or_queue(caption)
+            except Exception as exc:
+                log.warning("Telegram detection evidence delivery failed: %s", exc)
+                self.dispatch_or_queue(caption)
+
+        threading.Thread(target=deliver, name="TelegramDetectionEvidence", daemon=True).start()
 
     def on_source_transition(
         self,

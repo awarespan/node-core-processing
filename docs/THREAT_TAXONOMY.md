@@ -1,17 +1,17 @@
 # AWARESPAN Threat & Safety Taxonomy Specification
 
-**Project:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Official Problem Statement:** An AI-Powered Safety Device.  
-**Contact:** awarespan@bchbenjamin.in  
-**Taxonomy Identifier:** `awarespan-threat-taxonomy`  
-**Current Version:** `1.0.0`  
+**Project:** AWARESPAN
+**Tagline:** Awareness Without Boundaries.
+**Official Problem Statement:** An AI-Powered Safety Device.
+**Contact:** awarespan@bchbenjamin.in
+**Taxonomy Identifier:** `awarespan-threat-taxonomy`
+**Current Version:** `1.0.0`
 
 ---
 
 ## 1. Overview & Architectural Principles
 
-The AWARESPAN Threat Taxonomy provides a standardized, model-agnostic, and modality-independent representation of safety events. Individual machine learning models (YOLO, YAMNet, 3D-CNN action classifiers) emit raw framework labels, which are mapped to stable hierarchical taxonomy identifiers.
+The AWARESPAN Threat Taxonomy provides a standardized, model-agnostic, and modality-independent representation of safety events. Individual visual, audio and temporal-video model adapters map their raw framework labels to stable hierarchical taxonomy identifiers. The taxonomy includes future modality classes even when the corresponding trained weights or runtime adapters are not yet deployed.
 
 ### Key Rules:
 1. **Objective Evidence Over Subjective Profiling**: Detections represent physical objects (e.g. `weapon.firearm.handgun`) or objective kinetic events (e.g. `human_activity.distress.fall`). Appearance-based suspicion classification is strictly forbidden.

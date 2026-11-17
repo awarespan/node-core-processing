@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "human-video-actions",
+  "name": "Human Activity and Perimeter Video Dataset",
+  "modality": "video",
+  "task": "temporal_action_recognition",
+  "format": "video_or_temporal_frame_sequences",
+  "status": "PLANNED_DATASET_NOT_PRESENT",
+  "local_root": "datasets/registered/human_video_actions/",
+  "classes": [
+    "person_entering_perimeter",
+    "loitering",
+    "running",
+    "falling",
+    "fighting"
+  ],
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "license": "REQUIRED_BEFORE_TRAINING",
+  "source": "OPERATOR_SUPPLIED_OR_APPROVED_UPSTREAM",
+  "download_policy": "manual_only_no_automatic_download",
+  "notes": "Requires video-level or temporally grouped annotations. Do not treat independently sampled frames as action labels."
+}

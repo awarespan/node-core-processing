@@ -45,6 +45,52 @@ def send_message(text: str, chat_id: Optional[str] = None) -> bool:
         return False
 
 
+def send_photo(photo_bytes: bytes, caption: str, chat_id: Optional[str] = None) -> bool:
+    """Send an already-annotated JPEG to Telegram without persisting it locally."""
+    settings = get_settings()
+    token = settings.bot_token
+    target_chat = chat_id or settings.primary_chat_id
+    if not token or not target_chat:
+        log.warning("Telegram bot token or chat ID not configured; skipping evidence photo.")
+        return False
+    if not photo_bytes or len(photo_bytes) > 10 * 1024 * 1024:
+        log.warning("Telegram evidence photo is empty or exceeds the 10 MB Bot API limit.")
+        return False
+
+    boundary = "awarespan-" + __import__("secrets").token_hex(16)
+    parts = [
+        ("chat_id", str(target_chat).encode("utf-8")),
+        ("caption", sanitize_text(caption).encode("utf-8")[:1024]),
+        ("parse_mode", b"HTML"),
+    ]
+    body = bytearray()
+    for name, value in parts:
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+        body.extend(value)
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(b'Content-Disposition: form-data; name="photo"; filename="awarespan-detection.jpg"\r\n')
+    body.extend(b"Content-Type: image/jpeg\r\n\r\n")
+    body.extend(photo_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode())
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        req = urllib.request.Request(
+            url,
+            data=bytes(body),
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            return response.status == 200 and bool(result.get("ok"))
+    except Exception as exc:
+        log.error("Failed to deliver Telegram evidence photo: %s", sanitize_text(str(exc)))
+        return False
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: telegram_notify.py <command> [args...]")

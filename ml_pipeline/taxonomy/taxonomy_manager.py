@@ -98,7 +98,11 @@ class TaxonomyManager:
 
         # Visual mappings
         if modality == "visual":
-            if norm in ("gun", "handgun", "pistol", "revolver", "firearm"):
+            if norm in ("person", "man", "woman", "human"):
+                return "human.presence.person"
+            elif norm == "dog":
+                return "animal.companion.dog"
+            elif norm in ("gun", "handgun", "pistol", "revolver", "firearm"):
                 return "weapon.firearm.handgun"
             elif norm in ("rifle", "shotgun", "long_gun", "carbine"):
                 return "weapon.firearm.rifle"

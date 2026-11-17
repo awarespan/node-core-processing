@@ -95,9 +95,9 @@ CANDIDATE_MODELS_CATALOGUE: List[ModelCandidateAudit] = [
         hardware_suitability="Raspberry Pi 5 CPU (~45-65ms latency at 416x416)",
         reported_metrics={"mAP50": 0.81557, "mAP50_95": 0.60915, "precision": 0.8480, "recall": 0.72536},
         known_limitations="Optimized at 416x416 resolution; high precision on test split.",
-        sha256="ac06e9281a7f20208549e739b9b1dd4f20e426b209d12027ac9122d920c80c90",
-        download_status="VERIFIED_LOCAL",
-        integration_status="INTEGRATED",
+        sha256="not_present_in_current_checkout",
+        download_status="BLOCKED",
+        integration_status="RESEARCH_CANDIDATE",
     ),
 
     # 3. MegaDetector v5 / Animal Localizer
@@ -180,8 +180,8 @@ CANDIDATE_MODELS_CATALOGUE: List[ModelCandidateAudit] = [
         reported_metrics={"mAP": 0.306, "dataset": "AudioSet (521 classes)"},
         known_limitations="Sensitive to heavy ambient wind noise; impulse crest-factor gate prevents false triggers.",
         sha256="13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744",
-        download_status="VERIFIED_LOCAL",
-        integration_status="INTEGRATED",
+        download_status="BLOCKED",
+        integration_status="RESEARCH_CANDIDATE",
     ),
 
     # 6. Intel Fight/Violence Detection Action Classifier

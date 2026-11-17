@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "weapon-detection-existing",
+  "name": "Existing Weapon Detection Dataset",
+  "modality": "visual",
+  "task": "object_detection",
+  "format": "ultralytics_yolo",
+  "status": "LOCAL_DATASET_PRESENT",
+  "local_data_yaml": "Samples/weapon-detection-1/data.yaml",
+  "classes": [
+    {
+      "id": 0,
+      "name": "weapon",
+      "taxonomy_id": "weapon"
+    }
+  ],
+  "splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "license": "CC-BY-4.0_AS_DECLARED_IN_DATA_YAML",
+  "source": "EXISTING_REPOSITORY_SAMPLE",
+  "download_policy": "no_download",
+  "notes": "Existing local sample dataset. Check label semantics and compatibility before using it to fine-tune the two-class production weapon detector."
+}

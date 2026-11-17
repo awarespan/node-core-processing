@@ -1,9 +1,9 @@
 # AWARESPAN Model Registry & Lifecycle Management
 
-**Project:** AWARESPAN  
-**Tagline:** Awareness Without Boundaries.  
-**Official Problem Statement:** An AI-Powered Safety Device.  
-**Contact:** awarespan@bchbenjamin.in  
+**Project:** AWARESPAN
+**Tagline:** Awareness Without Boundaries.
+**Official Problem Statement:** An AI-Powered Safety Device.
+**Contact:** awarespan@bchbenjamin.in
 
 ---
 
@@ -33,16 +33,20 @@ stateDiagram-v2
 
 ---
 
-## 3. Active Registry Inventory (v1.0.0)
+## 3. Current Registry Inventory
 
-| Model Identifier | Version | Framework | Supported Classes | State | SHA-256 Checksum |
-| :--- | :---: | :--- | :--- | :---: | :--- |
-| `awarespan-weapon-yolov8n` | 1.0.0 | `ultralytics_yolov8` | Handgun, Knife | **DEPLOYED** | `e817da6a6bd08861095bf456f10bbad19dc3eda46669282fc266ddc47dca3e34` |
-| `awarespan-weapon-yolov8n-epoch80` | 1.0.0 | `ultralytics_yolov8` | Handgun, Knife | **APPROVED** | `ac06e9281a7f20208549e739b9b1dd4f20e426b209d12027ac9122d920c80c90` |
-| `awarespan-general-yolov8n` | 1.0.0 | `ultralytics_yolov8` | Fauna, Knife, People | **EVALUATED** | `f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36` |
-| `awarespan-yamnet-audio` | 1.0.0 | `yamnet_acoustic_dsp` | Gunshot, Scream, Glass, Alarm | **LOADED** | `13c3308955bbfaef262f175ac9c40e47b134573a93984f009220dd7cc12a1744` |
+The checked-in registry has two visual artifacts available locally and several candidates whose weights are not present. The Pi edge profile currently selects the weapon model and general COCO baseline. The latter is enabled as a provisional person/dog presence baseline and still needs field validation on the Pi camera.
 
----
+| Model Identifier | Artifact | Classes / Task | Registry state | Runtime status |
+| :--- | :--- | :--- | :---: | :--- |
+| `awarespan-weapon-yolov8n` | `shared/models/yolov8n_best_weapon.pt` | Gun, knife | **DEPLOYED** | Selected in `pi5_edge` |
+| `awarespan-general-yolov8n` | `yolov8n.pt` | COCO person, dog (allow-listed) | **EVALUATED** | Provisional edge baseline; camera validation pending |
+| `awarespan-weapon-yolov8n-epoch80` | `artifacts/model-checkpoints/recovered/epoch80_best_map.pt` | Gun, knife | **DISCOVERED** | Blocked: referenced file absent from checkout |
+| `awarespan-yamnet-audio` | `models/working/audio/yamnet.h5` | Audio event classification | **DISCOVERED** | Disabled: weight file absent |
+
+The runtime `AudioThreatAdapter` currently implements a rule-based spectral DSP baseline; it is not a loaded YAMNet neural network. The video temporal adapter is an extension contract only; no action-recognition weights are currently deployed.
+
+See [`models/deployed/manifest.json`](../models/deployed/manifest.json) for model profiles and checksum validation. `pi5_edge` is the active local profile. `cloud_full` is a planning contract and cannot be selected for execution until a real cloud inference provider is implemented.
 
 ## 4. Local Model Storage Layout
 
@@ -66,7 +70,7 @@ models/
 
 ## 5. API Reference
 
-The Python registry API is implemented in [`LocalModelRegistry`](file:///mnt/WindowsDrive/Shared/Projects/SIP/node-backend/ml_pipeline/registry/model_registry.py#L75-L175):
+The Python registry API is implemented in [`LocalModelRegistry`](../ml_pipeline/registry/model_registry.py):
 - `register_model(entry: ModelRegistryEntry) -> bool`
 - `transition_state(model_id: str, version: str, target_state: ModelState, reason: str) -> bool`
 - `get_model(model_id: str, version: Optional[str]) -> Optional[ModelRegistryEntry]`

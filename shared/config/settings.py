@@ -175,6 +175,12 @@ class Settings:
     default_model: str = field(
         default_factory=lambda: _get_str("ML_DEFAULT_MODEL", "yolov8n_best_weapon.pt")
     )
+    ml_deployment_profile: str = field(
+        default_factory=lambda: _get_str("ML_DEPLOYMENT_PROFILE", "pi5_edge")
+    )
+    ml_deployment_manifest: str = field(
+        default_factory=lambda: _get_str("ML_DEPLOYMENT_MANIFEST", "models/deployed/manifest.json")
+    )
 
     # Node Runtime
     runtime_host: str = field(default_factory=lambda: _get_str("RUNTIME_HOST", "0.0.0.0"))
@@ -201,9 +207,39 @@ class Settings:
     incident_db_path: str = field(
         default_factory=lambda: _get_str("INCIDENT_DB_PATH", "/tmp/awarespan_event_queue.db")
     )
-    siren_enabled: bool = field(default_factory=lambda: _get_bool("SIREN_ENABLED", True))
+    # Arm Pi-owned warning output only when ALSA reports a playback interface.
+    siren_enabled: bool = field(default_factory=lambda: _get_bool("SIREN_ENABLED", False))
+    speaker_enabled: bool = field(default_factory=lambda: _get_bool("SPEAKER_ENABLED", False))
+    presence_deterrence_enabled: bool = field(
+        default_factory=lambda: _get_bool("PRESENCE_DETERRENCE_ENABLED", False)
+    )
+    deterrence_target_labels: List[str] = field(
+        default_factory=lambda: _get_list("DETERRENCE_TARGET_LABELS", ["person"])
+    )
+    speaker_device: str = field(default_factory=lambda: _get_str("SPEAKER_DEVICE", "default"))
+    deterrence_state_file: str = field(
+        default_factory=lambda: _get_str("DETERRENCE_STATE_FILE", str(Path(_get_str("AWARESPAN_STATE_DIR", "/var/lib/awarespan")) / "deterrence_state.json"))
+    )
+    deterrence_frequency_min_hz: float = field(
+        default_factory=lambda: _get_float("DETERRENCE_FREQUENCY_MIN_HZ", 900.0)
+    )
+    deterrence_frequency_max_hz: float = field(
+        default_factory=lambda: _get_float("DETERRENCE_FREQUENCY_MAX_HZ", 1100.0)
+    )
+    deterrence_duration_sec: float = field(
+        default_factory=lambda: _get_float("DETERRENCE_DURATION_SEC", 1.5)
+    )
+    deterrence_output_amplitude: float = field(
+        default_factory=lambda: _get_float("DETERRENCE_OUTPUT_AMPLITUDE", 0.08)
+    )
+    deterrence_cooldown_sec: float = field(
+        default_factory=lambda: _get_float("DETERRENCE_COOLDOWN_SEC", 30.0)
+    )
     siren_file: str = field(
-        default_factory=lambda: _get_str("SIREN_FILE", str(REPO_ROOT / "Samples" / "siren.wav"))
+        default_factory=lambda: _get_str(
+            "SIREN_FILE",
+            str(Path(_get_str("AWARESPAN_STATE_DIR", "/var/lib/awarespan")) / "audio" / "presence_warning.wav"),
+        )
     )
 
     # Volunteer Media Gateway

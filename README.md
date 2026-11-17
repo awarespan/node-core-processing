@@ -241,3 +241,11 @@ Production nodes feature an interactive Telegram Bot for remote telemetry and fi
 - `/threats` — Display active Tier 1 and Tier 2 classification policies.
 - `/health` — Run bounded diagnostic probes.
 - **Photo Threat Test:** Send any photo directly to the bot. The node downloads the image, runs YOLOv8 weapon detection, annotates bounding boxes, classifies threats, and replies to the chat with the marked photo and threat decision.
+
+
+## Scalable ML workflow
+
+See [`docs/ML_ARCHITECTURE.md`](docs/ML_ARCHITECTURE.md) for edge/cloud deployment profiles and [`docs/ML_DATASETS_AND_TRAINING.md`](docs/ML_DATASETS_AND_TRAINING.md) for adding datasets and weights. Training is explicit, Pi-side, dry-run by default, and never downloads datasets or overwrites deployed weights.
+
+
+For the current Raspberry Pi model profile, validation commands, and future speaker setup, see [`docs/PI_ML_QUICKSTART.md`](docs/PI_ML_QUICKSTART.md).
