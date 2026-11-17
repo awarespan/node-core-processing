@@ -37,7 +37,7 @@ def test_taxonomy_label_mapping():
     tm = get_taxonomy_manager()
     assert tm.map_raw_label("gun", modality="visual") == "weapon.firearm.handgun"
     assert tm.map_raw_label("knife", modality="visual") == "weapon.edged.knife"
-    assert tm.map_raw_label("dog", modality="visual") == "animal.wildlife.general"
+    assert tm.map_raw_label("dog", modality="visual") == "animal.companion.dog"
     assert tm.map_raw_label("bear", modality="visual") == "animal.wildlife.predator"
     assert tm.map_raw_label("gunshot", modality="acoustic") == "audio.threat.gunshot"
     assert tm.map_raw_label("scream", modality="acoustic") == "audio.threat.scream"

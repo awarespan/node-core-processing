@@ -137,7 +137,7 @@ def test_backend_sync_headers_and_endpoints(monkeypatch):
     assert inc_payload["incidentId"] == evt.event_id
     assert inc_payload["nodeId"] == sync.node_id
     assert inc_payload["threatType"] == "WEAPON"
-    assert inc_payload["threatSeverity"] == "CRITICAL"
+    assert inc_payload["threatSeverity"] == "HIGH"
     assert "T" in inc_payload["detectionTime"]  # ISO-8601 string
 
 

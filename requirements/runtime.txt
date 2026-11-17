@@ -1,6 +1,6 @@
 # AWARESPAN Node Runtime Requirements
 # Minimal production dependencies for inference, communications, and auto-updates
-ultralytics>=8.0.0
+ultralytics==8.2.70
 opencv-python-headless>=4.8.0
 paho-mqtt>=1.6.1
 requests>=2.28.0

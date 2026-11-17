@@ -1,0 +1,43 @@
+name: AWARESPAN Edge CI
+on:
+  push:
+    branches: [main]
+    paths: ['**/*.py', 'requirements/**', 'tests/**', '.github/workflows/edge-ci.yml']
+  pull_request:
+    branches: [main]
+    paths: ['**/*.py', 'requirements/**', 'tests/**', '.github/workflows/edge-ci.yml']
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements/runtime.txt
+      - name: Install test/runtime dependencies
+        run: python -m pip install pytest requests python-dotenv paho-mqtt websockets numpy opencv-python-headless pillow psutil pyyaml
+      - name: Compile Python modules
+        run: python -m compileall -q node_runtime ml_pipeline shared scripts
+      - name: Run edge unit tests
+        run: pytest -q
+      - name: Validate Pi model artifacts
+        run: python scripts/validate_ml_deployment.py --profile pi5_edge
+
+  model-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU inference runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install ultralytics==8.2.70 opencv-python-headless==4.10.0.84
+      - name: Load and run active Pi models
+        run: python scripts/smoke_test_models.py

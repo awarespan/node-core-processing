@@ -274,6 +274,7 @@ class BackendSync:
             "threatSeverity": threat_severity,
             "threatDescription": threat_desc,
             "confidence": float(event.max_confidence),
+            "detections": [{"label": str(label).lower(), "confidence": float(event.max_confidence)} for label in event.labels],
             "detectionTime": detection_time,
             "tier": 1 if event.tier in ("tier1", "critical") else 2,
             "modelVersion": model or event.model,
