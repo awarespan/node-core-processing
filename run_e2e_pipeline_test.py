@@ -4,7 +4,10 @@ import os
 import time
 import urllib.request
 import urllib.error
-import paramiko
+try:
+    import paramiko
+except ImportError:
+    paramiko = None
 import dotenv
 
 dotenv.load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.operator"))
