@@ -22,7 +22,6 @@ KNOWN_SERVICES = {
     "power_monitor": "awarespan-power-monitor.service",
     "updater": "awarespan-updater.service",
     "updater_timer": "awarespan-updater.timer",
-    "training": "awarespan-training.service",
     "bot": "awarespan-bot.service",
 }
 
@@ -146,7 +145,7 @@ class ServiceManager:
             # Node runtime changes
             elif f_norm.startswith("node_runtime/monitoring/power_monitor.py"):
                 affected.add(KNOWN_SERVICES["power_monitor"])
-            elif f_norm.startswith("node_runtime/monitoring/telegram_bot.py") or f_norm.startswith("node_runtime/monitoring/telegram_notify.py"):
+            elif f_norm.startswith("pi/telegram_bot/bot.py") or f_norm.startswith("node_runtime/monitoring/telegram_notify.py"):
                 if self.is_active(KNOWN_SERVICES["bot"]):
                     affected.add(KNOWN_SERVICES["bot"])
             elif f_norm.startswith("node_runtime/"):
@@ -156,10 +155,9 @@ class ServiceManager:
             elif f_norm.startswith("deployment/systemd/"):
                 affected.add("systemd-reload")
 
-            # Training pipeline changes affect training service (if running)
+            # Workstation-only ML code never triggers a production Pi service restart.
             elif f_norm.startswith("ml_pipeline/"):
-                if self.is_active(KNOWN_SERVICES["training"]):
-                    affected.add(KNOWN_SERVICES["training"])
+                continue
 
         return affected
 

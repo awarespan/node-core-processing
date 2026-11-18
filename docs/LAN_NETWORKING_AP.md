@@ -37,14 +37,14 @@ AWARESPAN is engineered to operate in environments where cloud infrastructure, w
 
 ---
 
-## 2. Autonomous Wi-Fi AP Management (`scripts/setup_ap.sh`)
+## 2. Autonomous Wi-Fi AP Management (`pi/setup-ap.sh`)
 
 Network management on Raspberry Pi OS Bookworm utilizes NetworkManager (`nmcli`). The included automation script configures and controls the local Wi-Fi hotspot safely without disrupting wired Ethernet (`eth0`).
 
 ### 2.1 Access Point Parameters
 - **Connection Profile:** `AWARESPAN-AP`
 - **Default SSID:** `AWARESPAN-AP` (or configured via `AP_SSID`)
-- **Default WPA2 Password:** `awarespan123` (or configured via `AP_PASSWORD`)
+- **WPA2 Password:** configure a unique value through the protected node environment; do not use a shared default.
 - **Interface:** `wlan0`
 - **Subnet / Gateway:** `192.168.4.1/24`
 - **DHCP Pool:** `192.168.4.10` – `192.168.4.50` (managed by NetworkManager internal dnsmasq)
@@ -53,16 +53,16 @@ Network management on Raspberry Pi OS Bookworm utilizes NetworkManager (`nmcli`)
 
 ```bash
 # Check current AP and interface status
-./scripts/setup_ap.sh --status
+./pi/setup-ap.sh --status
 
 # Activate the Wi-Fi Hotspot with custom SSID and password
-sudo ./scripts/setup_ap.sh --enable "AWARESPAN-AP" "awarespan123"
+sudo ./pi/setup-ap.sh --enable "AWARESPAN-AP" "awarespan123"
 
 # Deactivate the Wi-Fi Hotspot (returns wlan0 to standby)
-sudo ./scripts/setup_ap.sh --disable
+sudo ./pi/setup-ap.sh --disable
 
 # Completely rollback and delete the AP connection profile
-sudo ./scripts/setup_ap.sh --rollback
+sudo ./pi/setup-ap.sh --rollback
 ```
 
 > [!IMPORTANT]
@@ -77,7 +77,7 @@ Web browsers enforce the W3C Secure Context specification: APIs such as `navigat
 Since volunteer devices connect via LAN IP (e.g., `https://192.168.4.1:8443` or `https://192.168.0.125:8443`), AWARESPAN serves the portal over HTTPS using a node-generated self-signed certificate.
 
 ### Step-by-Step Browser Acceptance:
-1. **Connect to Wi-Fi:** On the phone or laptop, join the `AWARESPAN-AP` Wi-Fi network (password: `awarespan123`).
+1. **Connect to Wi-Fi:** On the phone or laptop, join the `AWARESPAN-AP` Wi-Fi network (use the password configured by the operator).
 2. **Open Browser:** Navigate to `https://192.168.4.1:8443`.
 3. **Bypass Self-Signed Certificate Warning:**
    - **Google Chrome / Chromium:** Tap **Advanced** $\rightarrow$ Tap **Proceed to 192.168.4.1 (unsafe)**.

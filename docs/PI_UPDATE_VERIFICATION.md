@@ -1,4 +1,4 @@
-# AWARESPAN Raspberry Pi Autonomous Update Verification Report
+# AWARESPAN Raspberry Pi Update Verification — Historical Snapshot
 
 **Project:** AWARESPAN
 **Tagline:** Awareness Without Boundaries.
@@ -13,7 +13,9 @@
 
 ---
 
-## 1. Executive Summary & Verification Verdict
+> **Historical record only:** This snapshot is dated 2026-11-12 and does not establish the current state of the Pi. The hardware has not been available for the current deployment preparation. Do not use its IP, commit, service state or health claims as current facts.
+
+## 1. Executive Summary & Historical Verdict
 
 The autonomous update mechanism on the production Raspberry Pi 5 node was independently audited and verified through live SSH diagnostics.
 
@@ -83,8 +85,8 @@ The autonomous update mechanism on the production Raspberry Pi 5 node was indepe
 | `awarespan-updater.service` | Oneshot | ⚪ **inactive (dead)** | enabled | Executes staged fetch, merge & health checks |
 | `awarespan-node.service` | Simple | 🟢 **active (running)** | enabled | YOLOv8 inference, WebSocket ingest & dashboard |
 | `awarespan-power-monitor.service` | Simple | 🟢 **active (running)** | enabled | Undervoltage detection & thermal monitor |
-| `awarespan-bot.service` | Simple | 🟢 **active (running)** | enabled | Interactive Telegram operator command interface |
-| `awarespan-training.service` | Simple | ⚪ **inactive (dead)** | static | Model training (strictly disabled by default) |
+| Optional Telegram bot | — | not part of the standard install | disabled by default | Temporary operator tool under `pi/telegram_bot/` |
+| ML training | — | not installed on Pi | workstation-only | Training is separated under `ml_pipeline/` |
 
 ---
 

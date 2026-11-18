@@ -78,7 +78,7 @@ class VisualDetector:
             return str(shared_path.resolve())
 
         # Fallback to yolov8n.pt if best_weapon is missing
-        fallback = settings.repo_root / "yolov8n.pt"
+        fallback = settings.repo_root / "shared" / "models" / "yolov8n.pt"
         if fallback.is_file():
             log.warning("Preferred model %s not found; falling back to %s", path_str, fallback)
             return str(fallback.resolve())

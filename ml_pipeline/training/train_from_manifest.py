@@ -1,7 +1,8 @@
-"""Explicit, manifest-driven training jobs for execution on the Raspberry Pi.
+"""Explicit, manifest-driven workstation training jobs.
 
-This module never downloads datasets or model weights. It defaults to dry-run;
-real training requires --execute and ML_TRAINING_ENABLED=true.
+Production Raspberry Pi nodes are inference-only. This module never downloads
+datasets or model weights and defaults to validation-only; real training requires
+--execute and ML_TRAINING_ENABLED=true on a workstation.
 """
 
 import argparse
@@ -142,21 +143,15 @@ def run_job(job_id: str, execute: bool = False) -> Dict[str, Any]:
     if not execute:
         return report
     if not settings.ml_training_enabled:
-        raise RuntimeError("Set ML_TRAINING_ENABLED=true in the Pi runtime environment before explicit training")
-    if not platform.machine().lower().startswith(("aarch64", "arm64")):
-        raise RuntimeError("This training job is configured for the Raspberry Pi. Run it on the Pi, not in Box.")
-
-    from shared.utilities.system import get_throttled_state
-    power = get_throttled_state()
-    if power.undervoltage_now:
-        raise RuntimeError("Training refused: Raspberry Pi reports active undervoltage")
-    if power.temp_c is not None and power.temp_c >= 78.0:
-        raise RuntimeError(f"Training refused: CPU temperature is too high ({power.temp_c:.1f} C)")
+        raise RuntimeError("Set ML_TRAINING_ENABLED=true in the workstation environment before explicit training")
+    machine = platform.machine().lower()
+    if machine.startswith(("aarch64", "arm64", "armv7", "armv6")):
+        raise RuntimeError("Model training is workstation-only. Raspberry Pi devices are inference-only.")
 
     try:
         from ultralytics import YOLO
     except ImportError as exc:
-        raise RuntimeError("Ultralytics is not installed in the Pi training environment") from exc
+        raise RuntimeError("Ultralytics is not installed in the workstation training environment") from exc
 
     run_id = f"{job_id}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     output_root = _resolve(root, manifest["execution_policy"]["output_root"])

@@ -104,9 +104,16 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
 
     # Sudoers configuration for unprivileged service restarts by auto-updater
     echo "Installing updater sudoers policy..."
+    SYSTEMCTL_BIN="$(command -v systemctl)"
     sudo mkdir -p /etc/sudoers.d
-    sudo bash -c "echo '${CURRENT_USER} ALL=(ALL) NOPASSWD: /bin/systemctl restart awarespan-node.service, /bin/systemctl restart awarespan-power-monitor.service, /bin/systemctl restart awarespan-bot.service, /bin/systemctl restart awarespan-updater.service, /bin/systemctl daemon-reload' > /etc/sudoers.d/awarespan"
+    sudo bash -c "echo '${CURRENT_USER} ALL=(ALL) NOPASSWD: ${SYSTEMCTL_BIN} restart awarespan-node.service, ${SYSTEMCTL_BIN} restart awarespan-power-monitor.service, ${SYSTEMCTL_BIN} restart awarespan-updater.service, ${SYSTEMCTL_BIN} daemon-reload' > /etc/sudoers.d/awarespan"
     sudo chmod 0440 /etc/sudoers.d/awarespan
+
+    if command -v getenforce >/dev/null 2>&1 && [[ "$(getenforce 2>/dev/null || true)" == "Enforcing" ]]; then
+        echo "NOTE: SELinux is Enforcing (e.g. Fedora). If systemd units fail to execute from ${REPO_ROOT},"
+        echo "      either run user-space via ./scripts/fedora.sh run or relabel with:"
+        echo "      sudo chcon -R -t bin_t \"${VENV_PATH}/bin\""
+    fi
 
     echo "Reloading systemd daemon..."
     sudo systemctl daemon-reload
@@ -115,10 +122,8 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
     sudo systemctl enable --now awarespan-updater.timer
     sudo systemctl enable --now awarespan-power-monitor.service
     sudo systemctl enable --now awarespan-node.service
-    sudo systemctl enable --now awarespan-bot.service || true
 
-    # awarespan-training.service remains disabled by default on production nodes
-    echo "ML training service remains unlinked and disabled by default on production node."
+    echo "Training and the optional Telegram bot are not installed or started on production nodes."
 fi
 
 # 8. Set execute permissions on scripts

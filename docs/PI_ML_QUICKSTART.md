@@ -14,7 +14,7 @@ Preserve the existing `/etc/awarespan/node.env` file. Do not replace it with `.e
 ## 2. Validate the profile and local weights
 
 ```bash
-python3 scripts/validate_ml_deployment.py --profile pi5_edge
+python3 ml_pipeline/tools/validate_deployment.py --profile pi5_edge
 python3 -m ml_pipeline.datasets.manifest_loader
 ```
 
@@ -46,21 +46,9 @@ sudo journalctl -u awarespan-node.service -f
 
 At startup the runtime loads the `pi5_edge` profile. It verifies each model file's checksum and loads specialists sequentially to limit Pi CPU/memory pressure. If the person/dog model is absent or fails to load, startup logs the issue and continues with the weapon model if that model is available. If no selected visual model loads, startup fails rather than silently pretending inference is active.
 
-## 5. Pi-side training (only after data is ready)
+## 5. Training policy
 
-Training is separate from the node runtime. The runner validates local files and defaults to dry-run. It refuses URLs, missing split paths, and a class-name mismatch. It writes only to the ignored `models/working/training_runs/` directory.
-
-```bash
-python3 -m ml_pipeline.training.train_from_manifest --job person_dog_finetune_pi
-```
-
-The person/dog dataset does not currently exist in the repository; this command therefore reports that it is not ready. After an approved dataset is placed locally, audited, and both its dataset manifest and training job status are set to `TRAINING_ELIGIBLE` (with a verified licence), training can be explicitly enabled on the Pi:
-
-```bash
-ML_TRAINING_ENABLED=true python3 -m ml_pipeline.training.train_from_manifest --job person_dog_finetune_pi --execute
-```
-
-Do not train on the Box workspace. Do not enable training in the always-on node service. New checkpoints remain staged and require evaluation and explicit promotion; deployed weights are never overwritten by this runner.
+The production Pi is inference-only. Do not install training dependencies, enable `ML_TRAINING_ENABLED`, or run training jobs on the Pi. Dataset preparation, training, evaluation and checkpoint promotion happen on a workstation; see [`ml_pipeline/training/README.md`](../ml_pipeline/training/README.md). Only validated, checksummed deployment weights are copied into `shared/models/`.
 
 ## 6. Speaker installation later
 

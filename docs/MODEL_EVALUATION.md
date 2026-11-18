@@ -24,7 +24,7 @@ The current `pi5_edge` profile uses two repository-local artifacts:
 | Model | Artifact | Allowed labels | Current status |
 |---|---|---|---|
 | Weapon detector | `shared/models/yolov8n_best_weapon.pt` | `gun`, `knife` | Existing production checkpoint; checksum matches manifest |
-| General detector | `yolov8n.pt` | `person`, `dog` | Provisional COCO baseline; Pi camera validation pending |
+| General detector | `shared/models/yolov8n.pt` | `person`, `dog` | Provisional COCO baseline; Pi camera validation pending |
 
 Both artifact checksums were verified against `models/deployed/manifest.json`. This verifies file identity only; it does not prove successful model loading or real-time performance on the Pi.
 

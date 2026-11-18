@@ -19,8 +19,8 @@ import websockets
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Stream webcam frames to a Pi over WebSockets.")
-    parser.add_argument("--pi-host", default="192.168.1.50", help="Pi host or IP address")
-    parser.add_argument("--pi-port", type=int, default=8765, help="Pi ingest WebSocket port")
+    parser.add_argument("--pi-host", default="127.0.0.1", help="Pi host or IP address")
+    parser.add_argument("--pi-port", type=int, default=8766, help="Pi ingest WebSocket port")
     parser.add_argument("--camera", type=int, default=0, help="Camera index")
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=360, help="Capture height")

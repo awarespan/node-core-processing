@@ -63,3 +63,14 @@ datasets/processed/
 datasets/cache/
 # Training output and checkpoints
 runs/
+
+# Test/tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# This credential-free profile is intentionally versioned for the Fedora fallback.
+!config/fedora.env

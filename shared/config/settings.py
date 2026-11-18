@@ -45,6 +45,7 @@ def find_canonical_env() -> Optional[Path]:
 
     candidates = [
         Path("/etc/awarespan/node.env"),
+        Path.home() / ".config" / "awarespan" / "node.env",
         Path.home() / ".awarespan" / "node.env",
         Path("/var/lib/awarespan/node.env"),
         Path.home() / "edge-ai" / ".env",
@@ -173,7 +174,7 @@ class Settings:
         default_factory=lambda: _get_str("ML_CHECKPOINT_DIR", str(REPO_ROOT / "runs"))
     )
     default_model: str = field(
-        default_factory=lambda: _get_str("ML_DEFAULT_MODEL", "yolov8n_best_weapon.pt")
+        default_factory=lambda: _get_str("ML_DEFAULT_MODEL", "shared/models/yolov8n_best_weapon.pt")
     )
     ml_deployment_profile: str = field(
         default_factory=lambda: _get_str("ML_DEPLOYMENT_PROFILE", "pi5_edge")

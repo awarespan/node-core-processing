@@ -7,7 +7,7 @@ The table below reflects files actually present in this repository checkout. “
 | Model ID | Purpose | Local artifact | Status | Notes |
 |---|---|---|---|---|
 | `awarespan-weapon-yolov8n` | Weapon detection | `shared/models/yolov8n_best_weapon.pt` | **VERIFIED LOCAL** | Existing production checkpoint; `gun`, `knife` |
-| `awarespan-general-yolov8n` | General COCO detection | `yolov8n.pt` | **VERIFIED LOCAL** | Used as a provisional baseline with `person`, `dog` class allow-list |
+| `awarespan-general-yolov8n` | General COCO detection | `shared/models/yolov8n.pt` | **VERIFIED LOCAL** | Used as a provisional baseline with `person`, `dog` class allow-list |
 | `awarespan-weapon-yolov8n-epoch80` | Historical weapon candidate | `artifacts/model-checkpoints/recovered/epoch80_best_map.pt` | **MISSING FROM CHECKOUT** | Registry reference only; cannot load or deploy until the actual file is restored and re-hashed |
 | `awarespan-yamnet-audio` | Audio event classification | `models/working/audio/yamnet.h5` | **MISSING FROM CHECKOUT** | Disabled in the Pi profile; no YAMNet inference is active |
 | `megadetector-v5a` | Animal/person/vehicle localisation | Upstream only | **RESEARCH CANDIDATE** | Too large for the current Pi 5 CPU target; audit licence and benchmark before use |

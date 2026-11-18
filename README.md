@@ -1,251 +1,91 @@
-# AWARESPAN — Node Core Processing
+# AWARESPAN — Edge Node
 
-> **Tagline:** Awareness Without Boundaries.  
-> **Official Problem Statement:** An AI-Powered Safety Device.  
-> **Project Contact:** awarespan@bchbenjamin.in  
-> **Repository:** [https://github.com/awarespan/node-core-processing](https://github.com/awarespan/node-core-processing)
+AWARESPAN is an edge safety node for multimodal media ingestion, visual inference, threat assessment, deterrence control and backend synchronization. The production target is Raspberry Pi 5 (64-bit Raspberry Pi OS).
 
-Edge node core processing, autonomous lifecycle manager, and threat assessment engine for the **AWARESPAN** platform. Connects real-time video/audio sensor streams to the Raspberry Pi 5 Edge Compute Core running YOLOv8 threat detection, two-tier deterrence logic, cloud MQTT/REST synchronization, durable offline event queueing, and safe automated git updates.
+## Architecture
 
----
+```text
+node_runtime/       Production inference and edge application logic (no training)
+node_manager/       Health checks, update orchestration and rollback
+shared/             Runtime configuration, event models, logging and utilities
+shared/models/      Versioned deployment weights used by Pi and Fedora
+models/             Deployment manifest, checksums and model registry
+pi/                 Raspberry Pi launchers and operator-only integrations
+pi/telegram_bot/    Temporary, optional interactive Telegram bot (not auto-enabled)
+ml_pipeline/        Workstation-side ML datasets, training, evaluation and packaging
+datasets/           Small committed fixtures/manifests; large private datasets stay external
+deployment/         Production Raspberry Pi systemd and sudoers templates
+scripts/            Small operator command surface
+laptop/             Webcam sender used by the Fedora fallback
+static/             Volunteer portal assets
 
-## 1. Modular Architecture Overview
-
-The codebase is organized into **three independently managed subsystems** within a single repository:
-
-```
-node-core-processing/
-├── node_manager/           # Module 1: Lifecycle, auto-updates, rollback & health verification
-│   ├── updater/            # Update checker, staged executor, rollback & version state
-│   ├── service_manager.py  # Systemd controller and selective restart resolver
-│   ├── health_check.py     # Bounded runtime diagnostic probes
-│   └── cli.py              # Unified CLI: status, check, update, rollback, health
-│
-├── node_runtime/           # Module 2: Production edge runtime (NO training code)
-│   ├── detection/          # Visual (YOLOv8), acoustic, and hardware sensor interfaces
-│   ├── processing/         # Classifier, two-tier threat assessment, response selector
-│   ├── deterrence/         # Siren (aplay) audio deterrence and strobe triggers
-│   ├── communications/     # MQTT client, REST fallback, SQLite offline event queue
-│   ├── monitoring/         # Hardware power monitor & interactive Telegram bot
-│   └── main.py             # Production runtime entry point
-│
-├── ml_pipeline/            # Module 3: Model training & evaluation (DISABLED on nodes)
-│   ├── datasets/           # Dataset registry, download/merge, audit & deduplication
-│   ├── training/           # Autonomous training orchestrator, checkpoint resume & OOM fallback
-│   ├── evaluation/         # Batch video/audio evaluation
-│   └── packaging/          # Model artifact packaging & metadata generator
-│
-├── shared/                 # Common utilities across all subsystems
-│   ├── config/             # Canonical root .env discovery and typed settings
-│   ├── logging/            # Centralized logger with automatic credential scrubber
-│   ├── models/             # Shared dataclasses (events, detections, heartbeats, state)
-│   └── utilities/          # FileLock, hardware inspection (Pi throttled flags), safe subprocess
-│
-├── deployment/             # Systemd service & timer unit templates and sudoers policy
-│   ├── systemd/            # awarespan-updater, awarespan-node, awarespan-power-monitor, etc.
-│   └── sudoers/            # Passwordless systemctl permissions for non-root auto-updater
-│
-├── scripts/                # Operator CLI & deployment scripts
-│   ├── install.sh          # Idempotent installer (virtualenv, deps, systemd)
-│   ├── uninstall.sh        # Clean uninstaller (--purge support)
-│   ├── update.sh           # Manual update trigger CLI
-│   ├── rollback.sh         # Manual rollback trigger CLI
-│   └── status.sh           # Full diagnostic status CLI
-│
-└── requirements/           # Segregated dependency boundaries
-    ├── runtime.txt         # Production node runtime dependencies
-    ├── training.txt        # Dedicated ML training dependencies
-    └── dev.txt             # Testing & linting dependencies
+docs/               All project and deployment documentation
 ```
 
----
+## Choose your environment
 
-## 2. System Architecture Diagram
+### Raspberry Pi 5 — production
 
-```mermaid
-graph TD
-    subgraph Sensors["Edge Sensors"]
-        CAM["Camera / RTSP / Ingest Stream"]
-        MIC["Microphone / Audio Sensor"]
-        HW["Hardware Sensors (PIR / Tamper)"]
-    end
+After Raspberry Pi OS Desktop 64-bit has completed first boot:
 
-    subgraph Runtime["Module 2: Node Runtime"]
-        VD["Visual Detector (YOLOv8)"]
-        AC["Acoustic Classifier"]
-        HS["Hardware Sensors Interface"]
-        FUS["Multi-Modal Fusion Classifier"]
-        TA["Threat Assessor (Tier 1 vs Tier 2)"]
-        RS["Response Selector"]
-        DET["Deterrence Controller (Siren / Strobe)"]
-        COMM["Communications Engine"]
-        EQ["SQLite Offline Event Queue"]
-    end
-
-    subgraph Manager["Module 1: Node Manager & Updater"]
-        UC["Update Checker (GitHub main)"]
-        UE["Update Executor (Staged)"]
-        RB["Rollback Manager"]
-        VS["Version State Manager"]
-        HC["Health Checker"]
-        SM["Systemd Service Manager"]
-    end
-
-    subgraph Cloud["Cloud Infrastructure"]
-        MQTT["MQTT Broker (sip/{nodeId}/...)"]
-        REST["Central REST API (/api/nodes/...)"]
-        TG["Telegram Bot & Alert Webhooks"]
-    end
-
-    CAM --> VD
-    MIC --> AC
-    HW --> HS
-
-    VD --> FUS
-    AC --> FUS
-    HS --> FUS
-
-    FUS --> TA
-    TA --> RS
-    RS --> DET
-    RS --> COMM
-
-    COMM --> MQTT
-    COMM --> REST
-    COMM -.->|Offline Fallback| EQ
-    EQ -.->|Replay on Reconnect| COMM
-
-    UC --> UE
-    UE --> SM
-    UE --> HC
-    HC -.->|Failure Trigger| RB
-    UE --> VS
-    COMM --> TG
-```
-
----
-
-## 3. Automatic Update Lifecycle Diagram
-
-Production nodes poll the `main` branch on GitHub (default interval: 120s via `awarespan-updater.timer`). Updates are applied atomically without human intervention:
-
-```mermaid
-flowchart TD
-    Start["Systemd Timer Triggered (every 120s)"] --> Lock["Acquire FileLock (/tmp/awarespan-update.lock)"]
-    Lock --> NetCheck{"Internet Reachable?"}
-    NetCheck -- No --> Abort["Skip check & release lock"]
-    NetCheck -- Yes --> DirtyCheck{"Working Tree Clean?"}
-    DirtyCheck -- No --> WarnDirty["Log warning & block auto-update"]
-    DirtyCheck -- Yes --> Fetch["git fetch origin main"]
-    Fetch --> CompCommit{"Remote Commit != HEAD?"}
-    CompCommit -- No --> Idle["Node is up to date (IDLE)"]
-    CompCommit -- Yes --> RecordPre["Record rollback_target = current HEAD"]
-    RecordPre --> SyntaxCheck{"Validate Syntax (py_compile on incoming code)?"}
-    SyntaxCheck -- Failed --> Reject["Abort update & alert Telegram"]
-    SyntaxCheck -- Passed --> Merge["Fast-forward merge (git merge --ff-only)"]
-    Merge --> CheckDeps{"requirements/runtime.txt changed?"}
-    CheckDeps -- Yes --> PipInstall["pip install -r requirements/runtime.txt"]
-    CheckDeps -- No --> ResolveServices["Determine affected services"]
-    PipInstall --> ResolveServices
-    ResolveServices --> Restart["systemctl restart affected services"]
-    Restart --> HealthProbe{"Health Check Passed within 25s?"}
-    HealthProbe -- Yes --> MarkSuccess["Record SUCCESS in version_state.json & alert Telegram"]
-    HealthProbe -- No --> TriggerRB["Trigger Rollback (git reset --hard rollback_target)"]
-    TriggerRB --> RestartPrev["systemctl restart previous services"]
-    RestartPrev --> MarkRB["Record ROLLED_BACK in version_state.json & alert Telegram"]
-```
-
----
-
-## 4. Installation & Deployment
-
-### Quick Install on Raspberry Pi
-From repository root on the Pi:
 ```bash
 ./scripts/install.sh
-```
-
-The installer will:
-1. Validate hardware and Linux prerequisites.
-2. Create runtime directories (`/var/lib/awarespan`, `/var/log/awarespan`, `/var/lock/awarespan`).
-3. Set up the Python virtual environment and install `requirements/runtime.txt`.
-4. Deploy systemd units to `/etc/systemd/system/`.
-5. Configure passwordless service restart permissions for the auto-updater in `/etc/sudoers.d/awarespan`.
-6. Enable and start `awarespan-updater.timer`, `awarespan-node.service`, and `awarespan-power-monitor.service`.
-
-### Uninstallation
-```bash
-# Clean service uninstallation
-./scripts/uninstall.sh
-
-# Complete purge including state and logs
-./scripts/uninstall.sh --purge
-```
-
----
-
-## 5. Operations & CLI Reference
-
-### Check Diagnostic Status
-```bash
 ./scripts/status.sh
 ```
-Displays node identity, hardware model, current git commit, tracking branch, updater status, CPU temperature, undervoltage throttled status, and active systemd services.
 
-### Manual Update Check
-```bash
-python3 -m node_manager.cli check
-```
+The Pi performs inference and device operations only. **Model training is not installed or started by the production installer.** The interactive Telegram bot is optional and separate.
 
-### Trigger Update Immediately
-```bash
-./scripts/update.sh
-```
+See [Pi deployment instructions](docs/RASPBERRY_PI_SETUP.md) and [Pi entrypoints](pi/README.md).
 
-### Trigger Manual Rollback
-```bash
-# Roll back to the automatically recorded rollback target:
-./scripts/rollback.sh
+### Fedora laptop — evaluation fallback
 
-# Or roll back to an explicit commit SHA:
-./scripts/rollback.sh --commit 5f4b005d
-```
-
-### Run Subsystem Health Probe
-```bash
-python3 -m node_manager.cli health
-```
-
----
-
-## 6. Model Training Policy
-
-**Model training is strictly disabled by default on production edge nodes (`ML_TRAINING_ENABLED=false`).**
-
-Production nodes perform real-time video ingestion, YOLO inference, threat assessment, deterrence siren playback, and telemetry publishing. Model training is executed on dedicated workstations or explicitly enabled environments:
+This runs the node runtime locally without Raspberry Pi hardware, systemd, or production credentials by default:
 
 ```bash
-# Dedicated training run (from workstation with GPU/CPU):
-python3 -m ml_pipeline.training.train_autonomous --epochs 100 --batch 4 --force
-
-# Packaging trained weights into versioned deployment artifacts:
-python3 -m ml_pipeline.packaging.model_packager --weights runs/detect/train/weights/best.pt --name yolov8n_best_weapon --version 1.1.0
+./scripts/fedora.sh setup
+./scripts/fedora.sh models
+./scripts/fedora.sh test
 ```
 
----
+Terminal 1 — start the local node:
 
-## 7. Interactive Telegram Bot
+```bash
+./scripts/fedora.sh run
+```
 
-Production nodes feature an interactive Telegram Bot for remote telemetry and field threat testing:
-- `/status` — View node CPU temperature, throttled flags, and connectivity.
-- `/threats` — Display active Tier 1 and Tier 2 classification policies.
-- `/health` — Run bounded diagnostic probes.
-- **Photo Threat Test:** Send any photo directly to the bot. The node downloads the image, runs YOLOv8 weapon detection, annotates bounding boxes, classifies threats, and replies to the chat with the marked photo and threat decision.
+Terminal 2 — stream the laptop webcam into it:
 
+```bash
+./scripts/fedora.sh camera --camera 0 --fps 8
+```
 
-## Scalable ML workflow
+The local profile uses the distinct node ID `sip-fedora-eval`, stores state under `~/.local/state/awarespan-fedora`, and disables backend/MQTT credentials by default. It is a software evaluation fallback, not proof of Pi boot, GPIO, camera-module, power-monitor or acoustic hardware behaviour. For LAN camera clients, set `AWARESPAN_FEDORA_HOST=0.0.0.0` before starting the runtime.
 
-See [`docs/ML_ARCHITECTURE.md`](docs/ML_ARCHITECTURE.md) for edge/cloud deployment profiles and [`docs/ML_DATASETS_AND_TRAINING.md`](docs/ML_DATASETS_AND_TRAINING.md) for adding datasets and weights. Training is explicit, Pi-side, dry-run by default, and never downloads datasets or overwrites deployed weights.
+See [evaluation guide](docs/EVALUATION_GUIDE.md).
 
+## Model weights
 
-For the current Raspberry Pi model profile, validation commands, and future speaker setup, see [`docs/PI_ML_QUICKSTART.md`](docs/PI_ML_QUICKSTART.md).
+Committed deployment artifacts live in `shared/models/`. Their paths and SHA-256 checksums are declared in `models/deployed/manifest.json`. Verify them with:
+
+```bash
+./scripts/fedora.sh models
+```
+
+## ML training
+
+Training is a separate workstation workflow under `ml_pipeline/training/`; it is not part of the Pi runtime or Pi installation. Install `requirements/training.txt` on a dedicated workstation. Only promote validated weights into `shared/models/` and update the deployment manifest.
+
+See [ML pipeline documentation](ml_pipeline/README.md).
+
+## Configuration and secrets
+
+Copy `.env.example` to a secure external configuration location. Never commit `.env`, bot tokens, device secrets, MQTT credentials, TOTP secrets or SSH credentials. The Fedora fallback uses the committed, credential-free `config/fedora.env` profile and does not load production `.env` values.
+
+## Tests
+
+```bash
+./scripts/fedora.sh test
+./scripts/fedora.sh models
+```
+
+Tests on Fedora verify host-side software only. Physical Pi and peripheral checks must be performed when the hardware is available.

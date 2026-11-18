@@ -5,7 +5,7 @@
 The Raspberry Pi 5 runs local inference. The current `pi5_edge` profile is defined in `models/deployed/manifest.json` and loads two sequential visual specialists:
 
 - `awarespan-weapon-yolov8n`: the existing fine-tuned weapon checkpoint at `shared/models/yolov8n_best_weapon.pt`, filtered to `gun` and `knife`.
-- `awarespan-general-yolov8n`: the repository-local COCO-pretrained `yolov8n.pt`, filtered to `person` and `dog`. This is a baseline and still requires real Pi camera validation.
+- `awarespan-general-yolov8n`: the repository-local COCO-pretrained `shared/models/yolov8n.pt`, filtered to `person` and `dog`. This is a baseline and still requires real Pi camera validation.
 
 `node_runtime/detection/visual/ensemble.py` reads the deployment manifest, verifies local artifact checksums, loads the configured specialists, and runs them sequentially on each frame. Sequential inference is intentional for the Pi's CPU and memory budget. New specialists are added through the manifest and do not require rewriting the runtime processor.
 
@@ -41,7 +41,7 @@ See `docs/ML_DATASETS_AND_TRAINING.md` before adding data.
 
 ## Training location and safety
 
-The current training target is the Raspberry Pi, not Box. Training is never run by the node runtime automatically. `ml_pipeline/training/train_from_manifest.py` reads `training_jobs.json`, validates that datasets and weights already exist locally, and defaults to validation-only. Real training requires both `--execute` and `ML_TRAINING_ENABLED=true`, runs with CPU-oriented Pi settings, and writes only to the git-ignored `models/working/training_runs/`. It never overwrites deployed checkpoints or downloads datasets/weights.
+Training is performed on a dedicated workstation (Fedora or another supported development host), never on a production Raspberry Pi. Training is never run by the node runtime. `ml_pipeline/training/train_from_manifest.py` reads `training_jobs.json`, validates that datasets and weights already exist locally, and defaults to validation-only. Real training requires both `--execute` and `ML_TRAINING_ENABLED=true`, runs with workstation-selected CPU/GPU settings, and writes only to the git-ignored `models/working/training_runs/`. It never overwrites deployed checkpoints or downloads datasets/weights.
 
 Audio and video use separate task-specific trainers; the YOLO object-detection trainer must not be reused for temporal video or audio classification.
 

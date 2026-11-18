@@ -41,10 +41,10 @@ def test_audio_and_video_datasets_are_contracts_not_downloads():
     assert video["download_policy"] == "manual_only_no_automatic_download"
 
 
-def test_pi_training_is_explicit_and_outputs_are_staged():
+def test_workstation_training_is_explicit_and_outputs_are_staged():
     jobs = _read("ml_pipeline/training/training_jobs.json")
     policy = jobs["execution_policy"]
-    assert policy["training_host"] == "raspberry_pi_for_current_phase"
+    assert policy["training_host"] == "dedicated_workstation"
     assert policy["download_datasets"] is False
     assert policy["download_weights"] is False
     assert policy["require_explicit_execute_flag"] is True
@@ -66,14 +66,38 @@ def test_missing_audio_model_is_not_marked_loaded():
     assert audio["metadata"]["status"] == "BLOCKED_WEIGHTS_NOT_PRESENT"
 
 
-def test_training_entrypoints_do_not_use_bare_weight_names():
-    for path in (
-        ROOT / "ml_pipeline" / "train_local.py",
-        ROOT / "ml_pipeline" / "training" / "train_local.py",
-        ROOT / "ml_pipeline" / "training" / "train_weapon.py",
-        ROOT / "ml_pipeline" / "training" / "train_autonomous.py",
-        ROOT / "pi" / "train_weapon.py",
-        ROOT / "pi" / "train_autonomous.py",
-    ):
-        text = path.read_text(encoding="utf-8")
-        assert 'YOLO("yolov8n.pt")' not in text
+def test_training_is_confined_to_workstation_package():
+    entrypoint = ROOT / "ml_pipeline" / "training" / "train_from_manifest.py"
+    assert entrypoint.is_file()
+    source = entrypoint.read_text(encoding="utf-8")
+    assert "workstation-only" in source.lower()
+    assert "Raspberry Pi devices are inference-only" in source
+    assert not (ROOT / "pi" / "train_weapon.py").exists()
+    assert not (ROOT / "pi" / "train_autonomous.py").exists()
+
+
+def test_fedora_profile_isolated_from_production_node():
+    profile = {}
+    for line in (ROOT / "config" / "fedora.env").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        profile[key] = value
+    assert profile["PI_NODE_ID"] == "sip-fedora-eval"
+    assert profile["BACKEND_API_URL"] == ""
+    assert profile["BACKEND_API_KEY"] == ""
+    assert profile["PI_DEVICE_SECRET"] == ""
+    assert profile["MQTT_BROKER_URL"] == ""
+    assert profile["ML_TRAINING_ENABLED"].lower() == "false"
+    assert profile["SIREN_ENABLED"].lower() == "false"
+    assert profile["SPEAKER_ENABLED"].lower() == "false"
+
+
+def test_production_installer_excludes_training_and_optional_bot():
+    units = {path.name for path in (ROOT / "deployment" / "systemd").glob("*")}
+    assert "awarespan-node.service" in units
+    assert "awarespan-power-monitor.service" in units
+    assert "awarespan-updater.timer" in units
+    assert "awarespan-training.service" not in units
+    assert "awarespan-bot.service" not in units

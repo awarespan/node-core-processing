@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--input-dir", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--confidence", type=float, default=0.6)
-    parser.add_argument("--model", default="yolov8n_best_weapon.pt")
+    parser.add_argument("--model", default="shared/models/yolov8n_best_weapon.pt")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)

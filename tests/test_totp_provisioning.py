@@ -95,7 +95,7 @@ def test_provision_cli_tool(tmp_path):
     env_file.write_text("BACKEND_API_URL=https://api.example.com\n", encoding="utf-8")
 
     # 1. Test --sync-env
-    cmd = [sys.executable, "scripts/provision_totp.py", "--sync-env", str(env_file)]
+    cmd = [sys.executable, "tools/provision_totp.py", "--sync-env", str(env_file)]
     res = subprocess.run(cmd, capture_output=True, text=True, check=True)
     assert "Successfully synced TOTP_SECRET" in res.stdout
     assert env_file.exists()
@@ -106,13 +106,13 @@ def test_provision_cli_tool(tmp_path):
     assert mode == "0o600"
 
     # 2. Test --code
-    cmd_code = [sys.executable, "scripts/provision_totp.py", "--code"]
+    cmd_code = [sys.executable, "tools/provision_totp.py", "--code"]
     res_code = subprocess.run(cmd_code, capture_output=True, text=True, check=True)
     code = res_code.stdout.strip()
     assert len(code) == 6
     assert code.isdigit()
 
     # 3. Test --verify with the code
-    cmd_verify = [sys.executable, "scripts/provision_totp.py", "--verify", code]
+    cmd_verify = [sys.executable, "tools/provision_totp.py", "--verify", code]
     res_verify = subprocess.run(cmd_verify, capture_output=True, text=True, check=True)
     assert "SUCCESS" in res_verify.stdout

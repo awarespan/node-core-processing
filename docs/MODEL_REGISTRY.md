@@ -40,7 +40,7 @@ The checked-in registry has two visual artifacts available locally and several c
 | Model Identifier | Artifact | Classes / Task | Registry state | Runtime status |
 | :--- | :--- | :--- | :---: | :--- |
 | `awarespan-weapon-yolov8n` | `shared/models/yolov8n_best_weapon.pt` | Gun, knife | **DEPLOYED** | Selected in `pi5_edge` |
-| `awarespan-general-yolov8n` | `yolov8n.pt` | COCO person, dog (allow-listed) | **EVALUATED** | Provisional edge baseline; camera validation pending |
+| `awarespan-general-yolov8n` | `shared/models/yolov8n.pt` | COCO person, dog (allow-listed) | **EVALUATED** | Provisional edge baseline; camera validation pending |
 | `awarespan-weapon-yolov8n-epoch80` | `artifacts/model-checkpoints/recovered/epoch80_best_map.pt` | Gun, knife | **DISCOVERED** | Blocked: referenced file absent from checkout |
 | `awarespan-yamnet-audio` | `models/working/audio/yamnet.h5` | Audio event classification | **DISCOVERED** | Disabled: weight file absent |
 
