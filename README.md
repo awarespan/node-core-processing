@@ -10,7 +10,7 @@ Clone the repository, enter it, and run:
 ./scripts/setup.sh
 ```
 
-The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, and (on a Pi) install system services. The dependency baseline is CPython 3.11 with exact package pins. The installer replaces an incompatible existing virtual environment, installs the CPU-only PyTorch 2.5.1 / torchvision 0.20.1 pair first, and refuses source builds. Selecting ML training installs the complete development/test stack plus the dedicated dataset/training packages, and writes the dataset, checkpoint and deployment-manifest paths into the private node configuration. Safe defaults are used: production connectivity and training are off unless selected. The script creates a private configuration file outside Git.
+The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, install Pi system services, and configure the optional Telegram operator bot. The dependency baseline is CPython 3.11 with exact package pins. The installer replaces an incompatible existing virtual environment, installs the CPU-only PyTorch 2.5.1 / torchvision 0.20.1 pair first, and refuses source builds. Selecting ML training installs the complete development/test stack plus the dedicated dataset/training packages. All components use the same sectioned root `.env`, created from `.env.example` and protected with mode `0600`. Safe defaults are used: production connectivity, training and Telegram remain off unless selected.
 
 The same choices are available as flags for automation:
 
@@ -23,9 +23,12 @@ BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --productio
 
 # Workstation prepared for ML training, isolated from production
 ./scripts/setup.sh --profile linux --train --no-production
+
+# Opt in to the separate Telegram operator bot on a Pi
+./scripts/setup.sh --profile pi --production --service --telegram-bot
 ```
 
-Secrets must never be passed as command-line arguments. For non-interactive setup, export `BACKEND_API_KEY` (the backend's `DEVICE_API_KEY`) and optionally `PI_DEVICE_SECRET` in the environment. Interactive setup prompts for the API key with hidden input. The resulting config is stored at `/etc/awarespan/node.env` on a Pi or `~/.config/awarespan/node.env` on another Linux host, with mode `0600`.
+Secrets must never be passed as command-line arguments. For non-interactive setup, export `BACKEND_API_KEY` (the backend's `DEVICE_API_KEY`) and optionally `PI_DEVICE_SECRET` in the environment. Interactive setup prompts for the API key with hidden input. The resulting config is stored in the repository-root `.env`, with mode `0600`.
 
 See [`scripts/README.md`](scripts/README.md) for all flags and [`docs/EVALUATION_GUIDE.md`](docs/EVALUATION_GUIDE.md) for a workstation demo.
 
@@ -34,7 +37,7 @@ See [`scripts/README.md`](scripts/README.md) for all flags and [`docs/EVALUATION
 After setup, start the node in terminal 1 (replace the config path if you selected a custom `--env-file`):
 
 ```bash
-AWARESPAN_ENV_FILE="$HOME/.config/awarespan/node.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
+AWARESPAN_ENV_FILE="$PWD/.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
 ```
 
 In terminal 2, send webcam frames to it:
@@ -92,4 +95,4 @@ Software tests on a workstation do not verify Pi boot, CSI camera, GPIO, audio h
 
 ## Secrets and local state
 
-Never commit `.env`, `node.env`, API keys, device secrets, bot tokens, MQTT credentials, TOTP secrets or SSH credentials. Keep local configuration under `/etc/awarespan/` or `~/.config/awarespan/` with restrictive permissions. Training datasets, caches and run outputs should remain outside Git unless explicitly reviewed for publication.
+The single canonical configuration is the repository-root `.env`, created from [`.env.example`](.env.example) by the setup wizard. It is shared by the node runtime, ML training tools, Telegram operator bot, MQTT and systemd services. Keep `.env` at mode `0600`; it is ignored by Git. Never commit API keys, device secrets, bot tokens, MQTT credentials, TOTP secrets or SSH credentials. `AWARESPAN_ENV_FILE` can explicitly point a process at that same file when launched outside the repository working directory. Training datasets, caches and run outputs should remain outside Git unless explicitly reviewed for publication.

@@ -9,7 +9,7 @@ cd /path/to/node-core-processing
 git pull --ff-only origin main
 ```
 
-Preserve the existing `/etc/awarespan/node.env` file. Do not replace it with `.env.example`.
+Preserve any existing legacy `/etc/awarespan/node.env` values. The setup wizard migrates them into the single repository-root `.env`; do not overwrite an existing `.env` with a blank template.
 
 ## 2. Validate the profile and local weights
 

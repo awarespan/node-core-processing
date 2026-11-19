@@ -4,6 +4,7 @@ Unit tests for AWARESPAN configuration and logging.
 
 import logging
 from shared.config.settings import get_settings
+from shared.config import settings as settings_module
 from shared.logging.logger import sanitize_text, CredentialFilter
 
 
@@ -30,3 +31,20 @@ def test_logger_filter():
     cred_filter.filter(record)
     assert "9876543210:" not in record.msg
     assert "[REDACTED_BOT_TOKEN]" in record.msg
+
+
+def test_repository_root_env_precedes_legacy_config_paths(tmp_path, monkeypatch):
+    canonical = tmp_path / ".env"
+    canonical.write_text("PI_NODE_ID=canonical\n")
+    monkeypatch.setattr(settings_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("AWARESPAN_ENV_FILE", "")
+    assert settings_module.find_canonical_env() == canonical.resolve()
+
+
+def test_explicit_env_file_overrides_repository_root_env(tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text("PI_NODE_ID=canonical\n")
+    explicit = tmp_path / "custom.env"
+    explicit.write_text("PI_NODE_ID=explicit\n")
+    monkeypatch.setattr(settings_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("AWARESPAN_ENV_FILE", str(explicit))
+    assert settings_module.find_canonical_env() == explicit.resolve()

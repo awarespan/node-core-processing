@@ -38,7 +38,7 @@ The autonomous update mechanism on the production Raspberry Pi 5 node was indepe
  Node ID:           sip-pi-001
  Hardware:          Raspberry Pi 5 Model B Rev 1.1 (4 GB)
  Working Directory: /home/benjamin/SIP
- Canonical .env:    /etc/awarespan/node.env (Mode 0600)
+ Canonical .env:    <repository>/.env (Mode 0600)
  Pi Local Commit:   b6c5906e755ddead781ead41512c9bdffbc0f137
  Remote main:       b6c5906e755ddead781ead41512c9bdffbc0f137
  Working Tree:      CLEAN (0 uncommitted changes in tracked files)
@@ -85,7 +85,7 @@ The autonomous update mechanism on the production Raspberry Pi 5 node was indepe
 | `awarespan-updater.service` | Oneshot | ⚪ **inactive (dead)** | enabled | Executes staged fetch, merge & health checks |
 | `awarespan-node.service` | Simple | 🟢 **active (running)** | enabled | YOLOv8 inference, WebSocket ingest & dashboard |
 | `awarespan-power-monitor.service` | Simple | 🟢 **active (running)** | enabled | Undervoltage detection & thermal monitor |
-| Optional Telegram bot | — | not part of the standard install | disabled by default | Temporary operator tool under `pi/telegram_bot/` |
+| Optional Telegram bot | — | opt-in during setup | disabled by default | Separate operator unit under `pi/telegram_bot/`, using the shared root `.env` |
 | ML training | — | not installed on Pi | workstation-only | Training is separated under `ml_pipeline/` |
 
 ---

@@ -8,8 +8,10 @@ Run manually from the repository root:
 ./pi/telegram_bot/run.sh
 ```
 
-It uses the existing Telegram environment settings (`BOT_TOKEN`, `PRIMARY_CHAT_ID`, and any allowed-chat configuration). Keep credentials in the external node environment file; never put them in this directory or commit them.
+On a Pi, setup can instead install the separate systemd unit by selecting the Telegram option together with Pi services, or with `--telegram-bot`. The normal node service does not depend on the bot.
 
-An optional systemd unit template is provided as `awarespan-bot.service`. To install it manually, render `%USER%`, `%WORKDIR%`, and `%PYTHON%` for the target machine, copy it to `/etc/systemd/system/`, then explicitly enable it. The production installer does not do this.
+It uses the same repository-root `.env` as the node runtime (`BOT_TOKEN`, `PRIMARY_CHAT_ID`, and `ALLOWED_CHAT_IDS`). The setup wizard writes credentials there with mode `0600`; no Telegram-specific environment file is created.
+
+An optional systemd unit template is provided as `awarespan-bot.service`. To install it, run `scripts/install-telegram-bot.sh`; it renders `%USER%`, `%WORKDIR%`, `%PYTHON%`, and `%ENV_FILE%`, then starts a separate unit which explicitly reads the same `.env` selected during setup (root `.env` by default). The main node installer does not enable this bot automatically.
 
 Removing this directory and its optional service must not affect inference, backend synchronization, MQTT, or the power monitor.

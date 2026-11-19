@@ -12,7 +12,8 @@ pytestmark = pytest.mark.setup
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _run_setup(tmp_path, *options, api_key=None, profile="linux", python_minor="3.11", old_venv_minor=None):
+def _run_setup(tmp_path, *options, api_key=None, profile="linux", python_minor="3.11", old_venv_minor=None,
+               bot_token=None, primary_chat_id=None, allowed_chat_ids=None):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
     log = tmp_path / "install.log"
@@ -56,11 +57,20 @@ def _run_setup(tmp_path, *options, api_key=None, profile="linux", python_minor="
         "AWARESPAN_TEST_INSTALL_LOG": str(log),
         "AWARESPAN_TEST_PY_MINOR": python_minor,
     })
-    env.pop("BACKEND_API_KEY", None)
+    for key in ("BACKEND_API_KEY", "BOT_TOKEN", "PRIMARY_CHAT_ID", "ALLOWED_CHAT_IDS"):
+        env.pop(key, None)
     if api_key:
         env["BACKEND_API_KEY"] = api_key
+    if bot_token is not None:
+        env["BOT_TOKEN"] = bot_token
+    if primary_chat_id is not None:
+        env["PRIMARY_CHAT_ID"] = primary_chat_id
+    if allowed_chat_ids is not None:
+        env["ALLOWED_CHAT_IDS"] = allowed_chat_ids
+    env_file = tmp_path / ".env"
     result = subprocess.run(
-        [str(ROOT / "scripts/setup.sh"), "--profile", profile, "--non-interactive", *options],
+        [str(ROOT / "scripts/setup.sh"), "--profile", profile, "--env-file", str(env_file),
+         "--non-interactive", *options],
         cwd=ROOT, env=env, text=True, capture_output=True, check=False,
     )
     return result, home, log
@@ -100,17 +110,24 @@ def test_linux_setup_option_matrix(tmp_path):
         assert (any("requirements/training.txt" in line for line in install_lines)) is train
         assert any("--no-deps" in line and "requirements/ultralytics.txt" in line
                    for line in install_lines)
-        values = _config_values(home / ".config/awarespan/node.env")
+        values = _config_values(case_dir / ".env")
         assert values["ML_TRAINING_ENABLED"] == ("true" if train else "false")
         assert values["BACKEND_API_URL"] == (
-            "https://api.awarespan.bchbenjamin.in" if production else "")
+            "https://api.awarespan.bchbenjamin.in" if production
+            else "https://api.awarespan.bchbenjamin.in/"
+        )
         assert values["ML_DATASET_DIR"] == str(ROOT / "datasets")
         assert values["ML_CHECKPOINT_DIR"] == str(ROOT / "models/working/training_runs")
         assert values["ML_DEPLOYMENT_MANIFEST"] == "models/deployed/manifest.json"
-        config = home / ".config/awarespan/node.env"
+        config = case_dir / ".env"
         assert stat.S_IMODE(config.stat().st_mode) == 0o600
-        assert stat.S_IMODE(config.parent.stat().st_mode) == 0o700
+        assert values["AWARESPAN_STATE_DIR"] == str(case_dir / "home/.local/state/awarespan")
+        assert values["PI_NODE_ID"] == "sip-fedora-eval"
+        assert not (home / ".config/awarespan/node.env").exists()
         assert values["BACKEND_API_KEY"] == ("smoke-test-key" if production else "")
+        assert "# COMMON" in config.read_text()
+        assert "# ML" in config.read_text()
+        assert "# TELEGRAM" in config.read_text()
 
 
 def test_pi_profile_installs_runtime_without_training_or_dev(tmp_path):
@@ -162,6 +179,25 @@ def test_custom_node_backend_and_env_file_options(tmp_path):
     assert values["BACKEND_API_URL"] == "https://backend.example.test"
     assert values["BACKEND_API_KEY"] == "smoke-test-key"
     assert values["MQTT_CLIENT_ID"] == "workstation-smoke"
+
+
+def test_noninteractive_telegram_bot_uses_the_shared_env_file(tmp_path):
+    # The operator bot must read BOT_TOKEN from the same selected .env as the node.
+    valid_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890"
+    result, _, log = _run_setup(
+        tmp_path, "--telegram-bot", "--no-production", "--no-train",
+        bot_token=valid_token, primary_chat_id="123456789",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    config = tmp_path / ".env"
+    values = _config_values(config)
+    assert values["BOT_TOKEN"] == "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890"
+    assert values["PRIMARY_CHAT_ID"] == "123456789"
+    assert "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890" not in result.stdout + result.stderr
+    assert stat.S_IMODE(config.stat().st_mode) == 0o600
+    assert "Private config: " + str(config) in result.stdout
+    assert not (tmp_path / "telegram.env").exists()
+    assert not (tmp_path / "node.env").exists()
 
 
 def test_unsupported_python_fails_before_creating_environment(tmp_path):
@@ -243,3 +279,78 @@ def test_python_315_venv_is_replaced_by_python_311(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Replacing existing Python 3.15 environment with CPython 3.11" in result.stdout
     assert "Python        : CPython 3.11" in result.stdout
+
+
+def test_shared_env_template_is_grouped_and_complete():
+    template = (ROOT / ".env.example").read_text()
+    assert "# COMMON" in template
+    assert "# ML" in template
+    assert "# TELEGRAM" in template
+    assert "# MQTT" in template
+    assert "# BACKEND" in template
+    import re
+
+    referenced = set(re.findall(r'_get_(?:str|bool|int|float|list)\(\s*[\"]([A-Z][A-Z0-9_]*)[\"]',
+                                (ROOT / "shared/config/settings.py").read_text()))
+    declared = {line.split("=", 1)[0] for line in template.splitlines()
+                if line and not line.startswith("#") and "=" in line}
+    assert referenced <= declared, f"Missing template keys: {sorted(referenced - declared)}"
+    assert ".env" in (ROOT / ".gitignore").read_text()
+
+
+def test_telegram_service_and_launcher_use_the_shared_root_env():
+    unit = (ROOT / "pi/telegram_bot/awarespan-bot.service").read_text()
+    launcher = (ROOT / "pi/telegram_bot/run.sh").read_text()
+    installer = (ROOT / "scripts/install-telegram-bot.sh").read_text()
+    assert "Environment=AWARESPAN_ENV_FILE=%ENV_FILE%" in unit
+    assert 'AWARESPAN_ENV_FILE="$ROOT/.env"' in launcher
+    assert 'ENV_SOURCE="${AWARESPAN_ENV_FILE:-$ROOT/.env}"' in installer
+    assert "/etc/awarespan/node.env" not in unit + launcher + installer
+    setup = (ROOT / "scripts/setup.sh").read_text()
+    assert '"$ROOT/scripts/install-telegram-bot.sh"' in setup
+    assert '"$ROOT/scripts/uninstall-telegram-bot.sh"' in setup
+
+
+def test_env_migration_reorganises_sections_without_losing_secrets_or_custom_keys(tmp_path):
+    import subprocess
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "PI_NODE_ID=old-node\n"
+        "BACKEND_API_KEY=preserve-this-test-key\n"
+        "BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890\n"
+        "CUSTOM_OPERATOR_FLAG=keep-me\n"
+    )
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/merge_env.py"), str(env_path)],
+        cwd=ROOT, text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    content = env_path.read_text()
+    values = _config_values(env_path)
+    assert content.index("# COMMON") < content.index("# BACKEND") < content.index("# ML") < content.index("# TELEGRAM")
+    assert values["PI_NODE_ID"] == "old-node"
+    assert values["BACKEND_API_KEY"] == "preserve-this-test-key"
+    assert values["BOT_TOKEN"] == "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890"
+    assert values["CUSTOM_OPERATOR_FLAG"] == "keep-me"
+    assert "# CUSTOM / LEGACY SETTINGS" in content
+    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+
+
+def test_noninteractive_telegram_bot_requires_valid_token_and_allowlist_before_install(tmp_path):
+    valid_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890"
+    cases = [
+        ({"bot_token": "not-a-token", "primary_chat_id": "123456789"}, "BOT_TOKEN is malformed"),
+        ({"bot_token": valid_token, "primary_chat_id": "not-numeric"}, "PRIMARY_CHAT_ID must be a numeric"),
+        ({"bot_token": valid_token, "allowed_chat_ids": "123456789,invalid"}, "ALLOWED_CHAT_IDS must contain only"),
+        ({"bot_token": valid_token}, "requires PRIMARY_CHAT_ID or at least one ALLOWED_CHAT_IDS"),
+        ({"bot_token": valid_token, "allowed_chat_ids": " , , "}, "requires PRIMARY_CHAT_ID or at least one ALLOWED_CHAT_IDS"),
+    ]
+    for index, (kwargs, expected_error) in enumerate(cases):
+        case_dir = tmp_path / str(index)
+        case_dir.mkdir()
+        result, _, log = _run_setup(case_dir, "--telegram-bot", "--no-production", **kwargs)
+        assert result.returncode == 2
+        assert expected_error in result.stderr
+        assert not log.exists()
+        assert not (case_dir / ".env").exists()

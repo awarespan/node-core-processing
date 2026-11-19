@@ -30,18 +30,18 @@ cd node-core-processing
 ./scripts/status.sh
 ```
 
-The wizard detects the Pi, installs the CPython 3.11 venv, CPU-only PyTorch and pinned `requirements/runtime.txt` dependencies, then installs Ultralytics without pulling a second OpenCV distribution. It can install the edge runtime, power monitor and updater systemd services. It does **not** install model training or the optional interactive Telegram bot. It asks whether to connect to production and securely prompts for the backend device API key when needed.
+The wizard detects the Pi, installs the CPython 3.11 venv, CPU-only PyTorch and pinned `requirements/runtime.txt` dependencies, then installs Ultralytics without pulling a second OpenCV distribution. It can install the edge runtime, power monitor and updater systemd services. ML training remains workstation-only. Setup asks whether to configure the optional interactive Telegram bot; when selected on a Pi with services enabled, it installs a separate `awarespan-bot.service`. It also asks whether to connect to production and securely prompts for the backend device API key when needed.
 
 ## 4. Configure secrets
 
-Keep the device environment outside Git. The wizard creates a private config in `~/.config/awarespan/node.env` and installs a service-readable copy at `/etc/awarespan/node.env` owned by the node operator for systemd, both protected with mode `0600`. Configure:
+Keep one canonical device environment in the repository-root `.env`, copied from `.env.example` and protected with mode `0600`. The node runtime, updater, power monitor and optional Telegram service all read this same file; no `/etc/awarespan/node.env` or `~/.config/awarespan/node.env` copy is created. Existing legacy node.env files are migrated into the root `.env` by setup when needed. Configure:
 
 - `BACKEND_API_URL`
 - `PI_NODE_ID` (production identity: `sip-pi-001`)
 - `BACKEND_API_KEY` (the same value configured as `DEVICE_API_KEY` on the backend)
 - `PI_DEVICE_SECRET` (optional per-node secret, if the backend node record uses one)
 - MQTT broker credentials, if used
-- Telegram notification credentials, if notifications are enabled
+- `BOT_TOKEN`, `PRIMARY_CHAT_ID` and/or `ALLOWED_CHAT_IDS` for the optional operator bot
 
 Do not invent credentials, commit environment files, or print secrets in logs. Only one online device may use `sip-pi-001` at a time.
 
@@ -61,7 +61,7 @@ sudo systemctl status awarespan-node.service --no-pager
 sudo journalctl -u awarespan-node.service -f
 ```
 
-The interactive Telegram bot is a separate temporary tool under `pi/telegram_bot/`; it is not part of the normal install.
+The Telegram operator bot remains optional and separate under `pi/telegram_bot/`. Setup asks whether to configure it; when selected, the dedicated service reads the same repository-root `.env` as the node.
 
 ## 6. Model artifacts
 

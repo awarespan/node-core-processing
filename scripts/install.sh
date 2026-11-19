@@ -43,41 +43,47 @@ sudo mkdir -p /var/lib/awarespan /var/log/awarespan /var/lock/awarespan
 sudo chown -R "${CURRENT_USER}:${CURRENT_USER}" /var/lib/awarespan /var/log/awarespan /var/lock/awarespan
 mkdir -p "${REPO_ROOT}/state" "${REPO_ROOT}/logs" "${REPO_ROOT}/shared/models"
 
-# 4. Setup Python Virtual Environment
+# 4-5. Reuse the CPython 3.11 environment created by the unified setup wizard.
 VENV_PATH="${REPO_ROOT}/.venv"
-if [[ -f "${CURRENT_HOME}/edge-ai/pi/.venv/bin/python3" ]]; then
-    echo "Found existing edge-ai virtual environment at ${CURRENT_HOME}/edge-ai/pi/.venv"
-    PYTHON_EXEC="${CURRENT_HOME}/edge-ai/pi/.venv/bin/python3"
-elif [[ -f "${VENV_PATH}/bin/python3" ]]; then
-    echo "Using existing repository virtual environment at ${VENV_PATH}"
-    PYTHON_EXEC="${VENV_PATH}/bin/python3"
-else
-    echo "Creating Python virtual environment at ${VENV_PATH}..."
-    python3 -m venv "${VENV_PATH}"
-    PYTHON_EXEC="${VENV_PATH}/bin/python3"
+PYTHON_EXEC="${VENV_PATH}/bin/python"
+if [[ ! -x "${PYTHON_EXEC}" ]]; then
+    echo "Missing prepared Python environment: ${PYTHON_EXEC}" >&2
+    echo "Run ./scripts/setup.sh before installing systemd services." >&2
+    exit 2
 fi
+PYTHON_MINOR="$("${PYTHON_EXEC}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ "${PYTHON_MINOR}" != "3.11" ]]; then
+    echo "AWARESPAN requires CPython 3.11; found ${PYTHON_MINOR}. Re-run ./scripts/setup.sh." >&2
+    exit 2
+fi
+echo "Using the pinned Python environment: ${PYTHON_EXEC} (CPython ${PYTHON_MINOR})"
 
-# 5. Install Runtime Requirements
-echo "Installing runtime dependencies..."
-"${PYTHON_EXEC}" -m pip install --upgrade pip --no-warn-script-location >/dev/null
-"${PYTHON_EXEC}" -m pip install --no-warn-script-location -r "${REPO_ROOT}/requirements/runtime.txt"
-
-# 6. Setup Configuration Environment (stored OUTSIDE git repository)
-CONFIG_DIR="/etc/awarespan"
-sudo mkdir -p "${CONFIG_DIR}"
-sudo chown "${CURRENT_USER}:${CURRENT_USER}" "${CONFIG_DIR}"
-ENV_TARGET="${CONFIG_DIR}/node.env"
-
-if [[ ! -f "${ENV_TARGET}" ]]; then
-    if [[ -f "${CURRENT_HOME}/edge-ai/.env" ]]; then
-        echo "Installing environment configuration to ${ENV_TARGET}..."
-        cp "${CURRENT_HOME}/edge-ai/.env" "${ENV_TARGET}"
-        chmod 600 "${ENV_TARGET}"
-    elif [[ -f "${REPO_ROOT}/.env.example" ]]; then
-        echo "Creating initial template configuration at ${ENV_TARGET}..."
-        cp "${REPO_ROOT}/.env.example" "${ENV_TARGET}"
-        chmod 600 "${ENV_TARGET}"
-    fi
+# 6. Use the one repository-root configuration shared by all AWARESPAN components.
+ENV_TARGET="${AWARESPAN_ENV_FILE:-${REPO_ROOT}/.env}"
+if [[ ! -f "${ENV_TARGET}" && "${ENV_TARGET}" == "${REPO_ROOT}/.env" ]]; then
+    for legacy_env in \
+        "${CURRENT_HOME}/.config/awarespan/node.env" \
+        "${CURRENT_HOME}/.awarespan/node.env" \
+        "/etc/awarespan/node.env" \
+        "/var/lib/awarespan/node.env" \
+        "${CURRENT_HOME}/edge-ai/.env"; do
+        if [[ -f "${legacy_env}" ]]; then
+            cp "${legacy_env}" "${ENV_TARGET}"
+            echo "Migrated existing operator configuration into ${ENV_TARGET}."
+            break
+        fi
+    done
+fi
+if [[ ! -f "${ENV_TARGET}" && -f "${REPO_ROOT}/.env.example" ]]; then
+    cp "${REPO_ROOT}/.env.example" "${ENV_TARGET}"
+    echo "Created initial configuration from ${REPO_ROOT}/.env.example."
+fi
+if [[ -f "${ENV_TARGET}" ]]; then
+    chmod 600 "${ENV_TARGET}"
+    "${PYTHON_EXEC}" "${REPO_ROOT}/scripts/merge_env.py" "${ENV_TARGET}"
+else
+    echo "Missing ${ENV_TARGET}; run scripts/setup.sh first." >&2
+    exit 2
 fi
 
 # 7. Configure and Deploy Systemd Services
@@ -87,6 +93,7 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
 
     # Temporary rendering directory
     TMP_SYSTEMD=$(mktemp -d)
+    ENV_TARGET_ESCAPED="$(printf '%s' "${ENV_TARGET}" | sed 's/[\\&|]/\\&/g')"
     for service_file in "${SYSTEMD_DIR}"/*.service "${SYSTEMD_DIR}"/*.timer; do
         if [[ -f "${service_file}" ]]; then
             base_name=$(basename "${service_file}")
@@ -94,6 +101,7 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
                 -e "s|%USER%|${CURRENT_USER}|g" \
                 -e "s|%WORKDIR%|${REPO_ROOT}|g" \
                 -e "s|%PYTHON%|${PYTHON_EXEC}|g" \
+                -e "s|%ENV_FILE%|${ENV_TARGET_ESCAPED}|g" \
                 "${service_file}" > "${TMP_SYSTEMD}/${base_name}"
             
             echo "Installing ${base_name} to /etc/systemd/system/..."
@@ -124,6 +132,7 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
     sudo systemctl enable --now awarespan-node.service
 
     echo "Training and the optional Telegram bot are not installed or started on production nodes."
+    echo "All systemd units read the shared configuration file: ${ENV_TARGET}"
 fi
 
 # 8. Set execute permissions on scripts

@@ -4,7 +4,7 @@ Run scripts from any working directory; each resolves the repository root itself
 
 ## Unified setup wizard
 
-`./scripts/setup.sh` is the supported entrypoint for Raspberry Pi and general Linux hosts. It detects hardware/OS, installs host packages and Python dependencies, writes a private environment file, and optionally enables production REST connectivity. The dependency baseline is CPython 3.11; the installer recreates a venv built with another Python minor instead of reusing its ABI. It installs pinned CPU-only PyTorch 2.5.1 / torchvision 0.20.1 first, then uses `--only-binary=:all:` to prevent surprise source builds. Ultralytics 8.2.70 is installed separately with `--no-deps` because AWARESPAN deliberately uses `opencv-python-headless` rather than the GUI `opencv-python` wheel. On a workstation, `--train` installs both `requirements/dev.txt` and `requirements/training.txt`; the latter includes the full runtime stack and the exact pinned dataset/training packages. The generated config includes `ML_TRAINING_ENABLED`, `ML_DATASET_DIR`, `ML_CHECKPOINT_DIR` and `ML_DEPLOYMENT_MANIFEST`. It asks questions by default; use flags for repeatable automation.
+`./scripts/setup.sh` is the supported entrypoint for Raspberry Pi and general Linux hosts. It detects hardware/OS, installs host packages and Python dependencies, creates or migrates the repository-root `.env` from `.env.example`, and optionally enables production REST connectivity and the separate Telegram operator bot. The dependency baseline is CPython 3.11; the installer recreates a venv built with another Python minor instead of reusing its ABI. It installs pinned CPU-only PyTorch 2.5.1 / torchvision 0.20.1 first, then uses `--only-binary=:all:` to prevent surprise source builds. Ultralytics 8.2.70 is installed separately with `--no-deps` because AWARESPAN deliberately uses `opencv-python-headless` rather than the GUI `opencv-python` wheel. On a workstation, `--train` installs both `requirements/dev.txt` and `requirements/training.txt`; the latter includes the full runtime stack and the exact pinned dataset/training packages. The generated config includes `ML_TRAINING_ENABLED`, `ML_DATASET_DIR`, `ML_CHECKPOINT_DIR` and `ML_DEPLOYMENT_MANIFEST`. It asks questions by default; use flags for repeatable automation.
 
 | Flag | Meaning |
 |---|---|
@@ -12,12 +12,13 @@ Run scripts from any working directory; each resolves the repository root itself
 | `--train` / `--no-train` | Install or omit workstation ML training dependencies |
 | `--production` / `--no-production` | Enable or disable production backend REST sync |
 | `--service` / `--no-service` | Install/start Pi systemd services; Pi profile only |
+| `--telegram-bot` / `--no-telegram-bot` | Configure the optional Telegram bot; separate Pi systemd unit when services are enabled |
 | `--node-id ID` | Set this machine's unique node identity |
 | `--backend-url URL` | Override the production backend URL |
-| `--env-file PATH` | Choose the private configuration path |
+| `--env-file PATH` | Advanced override for the shared configuration path (default: repository-root `.env`) |
 | `--non-interactive` | Disable prompts; only explicitly selected options are enabled |
 
-Secrets are not accepted as command-line arguments. Interactive production setup asks for the backend's `DEVICE_API_KEY` with hidden input. Automation should export `BACKEND_API_KEY` and optionally `PI_DEVICE_SECRET` before running setup. The script stores these in the private env file with mode `0600`.
+Secrets are not accepted as command-line arguments. Interactive production setup asks for the backend's `DEVICE_API_KEY` with hidden input. Automation should export `BACKEND_API_KEY` and optionally `PI_DEVICE_SECRET` before running setup. The script stores these in the shared repository-root `.env` with mode `0600`. Telegram setup similarly prompts for `BOT_TOKEN` (hidden) and an authorised chat ID; the bot refuses to start without a numeric allowlist.
 
 Examples:
 
@@ -26,6 +27,7 @@ Examples:
 ./scripts/setup.sh --profile pi --no-train --production --service
 BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --production --no-train --non-interactive
 ./scripts/setup.sh --profile linux --train --no-production
+./scripts/setup.sh --profile pi --production --service --telegram-bot
 ```
 
 A workstation should use a distinct ID (default `sip-fedora-eval`) rather than impersonating `sip-pi-001`. Production REST authentication uses the shared backend `DEVICE_API_KEY` as `BACKEND_API_KEY`. MQTT remains separate and requires its own broker configuration and node credentials.
@@ -44,3 +46,7 @@ Specialist tools live under `pi/`, `tools/` and `ml_pipeline/tools/`.
 ## Test runner
 
 Use `./scripts/test.sh setup` to re-run the isolated setup wizard and dependency-selection tests, or `./scripts/test.sh all` for the full suite. See [`../tests/README.md`](../tests/README.md) and [`../requirements/README.md`](../requirements/README.md) for the test matrix and dependency update policy.
+
+## Shared configuration
+
+All components read the repository-root `.env`, created from `.env.example` and protected with mode `0600`. Do not create a Telegram-specific env file or a second `/etc/awarespan/node.env`; systemd units point to the same root file. `AWARESPAN_ENV_FILE` is available for an explicit path when a process is launched from outside the repository.

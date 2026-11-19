@@ -8,9 +8,12 @@ Wants=network-online.target
 Type=simple
 User=%USER%
 WorkingDirectory=%WORKDIR%
+Environment=AWARESPAN_ENV_FILE=%ENV_FILE%
 ExecStart=%PYTHON% -m pi.telegram_bot.bot
-Restart=always
+Restart=on-failure
 RestartSec=10
+NoNewPrivileges=true
+UMask=0077
 StandardOutput=journal
 StandardError=journal
 Nice=10

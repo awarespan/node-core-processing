@@ -10,6 +10,7 @@ Contact: awarespan@bchbenjamin.in
 
 import json
 import os
+import re
 import shutil
 import time
 from io import BytesIO
@@ -46,6 +47,21 @@ class TelegramOperatorBot:
         self.detector: Optional[VisualDetector] = None
         self.assessor = ThreatAssessor()
         self.last_text_time = 0.0
+
+    def validate_configuration(self) -> bool:
+        """Reject incomplete or unsafe operator-bot configuration."""
+        if not re.fullmatch(r"[0-9]{8,11}:[A-Za-z0-9_-]{35,}", self.bot_token or ""):
+            log.error("BOT_TOKEN is missing or malformed; Telegram operator bot cannot start.")
+            return False
+        if any(not re.fullmatch(r"-?[0-9]+", chat_id) for chat_id in self.allowed_chats):
+            log.error("Telegram allowlist contains a non-numeric chat ID; refusing to start.")
+            return False
+        if not self.allowed_chats:
+            log.error(
+                "No Telegram chats are authorised. Set PRIMARY_CHAT_ID or ALLOWED_CHAT_IDS; refusing open access."
+            )
+            return False
+        return True
 
     def _get_detector(self) -> VisualDetector:
         """Lazy load visual detector when first needed."""
@@ -184,8 +200,7 @@ class TelegramOperatorBot:
 
     def run(self) -> None:
         """Main polling loop."""
-        if not self.bot_token:
-            log.warning("BOT_TOKEN is not configured; Telegram operator bot cannot start.")
+        if not self.validate_configuration():
             return
 
         log.info("Starting AWARESPAN Telegram Operator Bot for node %s...", self.settings.node_id)

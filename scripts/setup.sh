@@ -11,6 +11,7 @@ PROFILE="auto"
 TRAIN=""
 PRODUCTION=""
 SERVICE=""
+TELEGRAM_BOT=""
 NON_INTERACTIVE=0
 NODE_ID=""
 BACKEND_URL="https://api.awarespan.bchbenjamin.in"
@@ -35,6 +36,8 @@ Options:
   --production / --no-production
                               Connect this node to the production backend
   --service / --no-service    Install/start Pi systemd services (Pi only)
+  --telegram-bot / --no-telegram-bot
+                              Configure the optional interactive Telegram bot
   --node-id ID                Node identity (default: sip-pi-001 on Pi,
                               sip-fedora-eval on other Linux)
   --backend-url URL           Backend base URL
@@ -52,8 +55,9 @@ Examples:
   BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --production --non-interactive
   ./scripts/setup.sh --profile linux --train --no-production
 
-The production backend key is the backend's DEVICE_API_KEY. It is stored locally
-in the private node.env file as BACKEND_API_KEY. Do not commit that file.
+The production backend key is the backend's DEVICE_API_KEY. It is stored in the
+root .env file as BACKEND_API_KEY. The same .env is shared by runtime, ML,
+Telegram and other components; do not commit it.
 USAGE
 }
 
@@ -88,6 +92,8 @@ while (($#)); do
     --no-production) PRODUCTION=no; shift ;;
     --service) SERVICE=yes; shift ;;
     --no-service) SERVICE=no; shift ;;
+    --telegram-bot) TELEGRAM_BOT=yes; shift ;;
+    --no-telegram-bot) TELEGRAM_BOT=no; shift ;;
     --node-id) NODE_ID="${2:?Missing value for --node-id}"; shift 2 ;;
     --backend-url) BACKEND_URL="${2:?Missing value for --backend-url}"; shift 2 ;;
     --env-file) ENV_TARGET="${2:?Missing value for --env-file}"; shift 2 ;;
@@ -115,22 +121,41 @@ if [[ "$PROFILE" == pi ]]; then
   DEFAULT_NODE_ID="sip-pi-001"
   DEFAULT_TRAIN=no
   DEFAULT_SERVICE=yes
-  DEFAULT_ENV="$HOME/.config/awarespan/node.env"
+  DEFAULT_ENV="$ROOT/.env"
   STATE_DIR="/var/lib/awarespan"
 else
   DEFAULT_NODE_ID="sip-fedora-eval"
   DEFAULT_TRAIN=no
   DEFAULT_SERVICE=no
-  DEFAULT_ENV="$HOME/.config/awarespan/node.env"
+  DEFAULT_ENV="$ROOT/.env"
   STATE_DIR="$HOME/.local/state/awarespan"
 fi
 NODE_ID="${NODE_ID:-$DEFAULT_NODE_ID}"
 ENV_TARGET="${ENV_TARGET:-$DEFAULT_ENV}"
 
+# Identify a legacy config before preflight so non-interactive setup can reuse
+# credentials already stored in an older installation's file.
+LEGACY_ENV_SOURCE=""
+if [[ "$ENV_TARGET" == "$ROOT/.env" && ! -f "$ENV_TARGET" ]]; then
+  for candidate in \
+    "$HOME/.config/awarespan/node.env" \
+    "$HOME/.awarespan/node.env" \
+    "/etc/awarespan/node.env" \
+    "/var/lib/awarespan/node.env" \
+    "$HOME/edge-ai/.env"; do
+    if [[ -f "$candidate" ]]; then
+      LEGACY_ENV_SOURCE="$candidate"
+      break
+    fi
+  done
+fi
+
 if [[ "$PRODUCTION" == yes && "$NON_INTERACTIVE" == 1 && -z "${BACKEND_API_KEY:-}" ]]; then
   EXISTING_KEY=""
-  if [[ -f "$ENV_TARGET" ]]; then
-    EXISTING_KEY="$(grep -m1 '^BACKEND_API_KEY=' "$ENV_TARGET" | cut -d= -f2- || true)"
+  KEY_SOURCE="$ENV_TARGET"
+  [[ -f "$KEY_SOURCE" ]] || KEY_SOURCE="$LEGACY_ENV_SOURCE"
+  if [[ -n "$KEY_SOURCE" && -f "$KEY_SOURCE" ]]; then
+    EXISTING_KEY="$(grep -m1 '^BACKEND_API_KEY=' "$KEY_SOURCE" | cut -d= -f2- || true)"
   fi
   if [[ -z "$EXISTING_KEY" ]]; then
     echo "Non-interactive production setup requires BACKEND_API_KEY in the environment or existing env file." >&2
@@ -160,6 +185,9 @@ if [[ -z "$SERVICE" ]]; then
   else SERVICE=no
   fi
 fi
+if [[ -z "$TELEGRAM_BOT" ]]; then
+  if ask_yes_no "Configure the optional interactive Telegram operator bot?" no; then TELEGRAM_BOT=yes; else TELEGRAM_BOT=no; fi
+fi
 if [[ "$TRAIN" == yes && ( "$PROFILE" == pi || "$ARCH" == aarch64 || "$ARCH" == arm64 || "$ARCH" == armv7l || "$ARCH" == armv6l ) ]]; then
   echo "ML training is restricted to x86-64 workstations; ARM edge devices are inference-only." >&2
   exit 2
@@ -167,6 +195,46 @@ fi
 if [[ "$SERVICE" == yes && "$PROFILE" != pi ]]; then
   echo "System service installation is reserved for the Raspberry Pi profile." >&2
   exit 2
+fi
+if [[ "$TELEGRAM_BOT" == yes && "$NON_INTERACTIVE" == 1 ]]; then
+  EXISTING_BOT_TOKEN="${BOT_TOKEN:-}"
+  EXISTING_PRIMARY_CHAT="${PRIMARY_CHAT_ID:-}"
+  EXISTING_ALLOWED_CHATS="${ALLOWED_CHAT_IDS:-}"
+  TELEGRAM_CONFIG_SOURCE="$ENV_TARGET"
+  [[ -f "$TELEGRAM_CONFIG_SOURCE" ]] || TELEGRAM_CONFIG_SOURCE="$LEGACY_ENV_SOURCE"
+  if [[ -n "$TELEGRAM_CONFIG_SOURCE" && -f "$TELEGRAM_CONFIG_SOURCE" ]]; then
+    [[ -n "$EXISTING_BOT_TOKEN" ]] || EXISTING_BOT_TOKEN="$(grep -m1 '^BOT_TOKEN=' "$TELEGRAM_CONFIG_SOURCE" | cut -d= -f2- || true)"
+    [[ -n "$EXISTING_PRIMARY_CHAT" ]] || EXISTING_PRIMARY_CHAT="$(grep -m1 '^PRIMARY_CHAT_ID=' "$TELEGRAM_CONFIG_SOURCE" | cut -d= -f2- || true)"
+    [[ -n "$EXISTING_ALLOWED_CHATS" ]] || EXISTING_ALLOWED_CHATS="$(grep -m1 '^ALLOWED_CHAT_IDS=' "$TELEGRAM_CONFIG_SOURCE" | cut -d= -f2- || true)"
+  fi
+  if [[ -z "$EXISTING_BOT_TOKEN" ]]; then
+    echo "Non-interactive Telegram setup requires BOT_TOKEN." >&2
+    echo "Export BOT_TOKEN or configure it in $ENV_TARGET and re-run." >&2
+    exit 2
+  fi
+  if [[ ! "$EXISTING_BOT_TOKEN" =~ ^[0-9]{8,11}:[A-Za-z0-9_-]{35,}$ ]]; then
+    echo "Telegram BOT_TOKEN is malformed; check the token issued by BotFather." >&2
+    exit 2
+  fi
+  if [[ -n "$EXISTING_PRIMARY_CHAT" && ! "$EXISTING_PRIMARY_CHAT" =~ ^-?[0-9]+$ ]]; then
+    echo "PRIMARY_CHAT_ID must be a numeric Telegram chat ID." >&2
+    exit 2
+  fi
+  HAS_ALLOWED_CHAT=0
+  IFS=',' read -r -a CHAT_ID_ARRAY <<< "$EXISTING_ALLOWED_CHATS"
+  for CHAT_ID in "${CHAT_ID_ARRAY[@]}"; do
+    CHAT_ID="${CHAT_ID//[[:space:]]/}"
+    [[ -z "$CHAT_ID" ]] && continue
+    HAS_ALLOWED_CHAT=1
+    if [[ ! "$CHAT_ID" =~ ^-?[0-9]+$ ]]; then
+      echo "ALLOWED_CHAT_IDS must contain only comma-separated numeric Telegram chat IDs." >&2
+      exit 2
+    fi
+  done
+  if [[ -z "$EXISTING_PRIMARY_CHAT" && "$HAS_ALLOWED_CHAT" == 0 ]]; then
+    echo "Non-interactive Telegram setup requires PRIMARY_CHAT_ID or at least one ALLOWED_CHAT_IDS entry." >&2
+    exit 2
+  fi
 fi
 
 # Install host packages using the detected Linux package manager.
@@ -229,40 +297,39 @@ fi
 "$PYTHON" -m pip install --only-binary=:all: --no-deps -r "$ROOT/requirements/ultralytics.txt"
 
 mkdir -p "$(dirname "$ENV_TARGET")"
-chmod 700 "$(dirname "$ENV_TARGET")"
+if [[ "$(dirname "$ENV_TARGET")" != "$ROOT" ]]; then
+  chmod 700 "$(dirname "$ENV_TARGET")"
+fi
+
+# Use the repository's single canonical .env. If this is an older installation,
+# adopt its existing private config once; never create a second runtime config.
+if [[ ! -f "$ENV_TARGET" && -n "$LEGACY_ENV_SOURCE" ]]; then
+  cp -- "$LEGACY_ENV_SOURCE" "$ENV_TARGET"
+  chmod 600 "$ENV_TARGET"
+  echo "Migrated existing private settings from $LEGACY_ENV_SOURCE into $ENV_TARGET."
+fi
+
 if [[ -e "$ENV_TARGET" ]]; then
   chmod 600 "$ENV_TARGET"
   echo "Existing configuration preserved: $ENV_TARGET"
 else
+  if [[ ! -f "$ROOT/.env.example" ]]; then
+    echo "Configuration template is missing: $ROOT/.env.example" >&2
+    exit 2
+  fi
   umask 077
-  cat >"$ENV_TARGET" <<EOF
-# AWARESPAN node configuration — keep private; never commit.
-BACKEND_API_URL=
-BACKEND_API_KEY=
-PI_NODE_ID=$NODE_ID
-PI_DEVICE_SECRET=
-MQTT_BROKER_URL=
-MQTT_CLIENT_ID=$NODE_ID
-MQTT_USERNAME=
-MQTT_PASSWORD=
-AWARESPAN_STATE_DIR=$STATE_DIR
-RUNTIME_HOST=127.0.0.1
-RUNTIME_PORT=8766
-SIREN_ENABLED=false
-SPEAKER_ENABLED=false
-PRESENCE_DETERRENCE_ENABLED=false
-ML_TRAINING_ENABLED=$([[ "$TRAIN" == yes ]] && echo true || echo false)
-ML_DATASET_DIR=$ROOT/datasets
-ML_CHECKPOINT_DIR=$ROOT/models/working/training_runs
-ML_DEPLOYMENT_MANIFEST=models/deployed/manifest.json
-AWARESPAN_AUTO_UPDATE_ENABLED=false
-EOF
+  cp "$ROOT/.env.example" "$ENV_TARGET"
   chmod 600 "$ENV_TARGET"
+  echo "Created private, sectioned configuration from .env.example: $ENV_TARGET"
 fi
+
+# Normalise existing or migrated config into the same logical sections as the
+# tracked template. Current secrets and custom keys are preserved.
+"$PYTHON" "$ROOT/scripts/merge_env.py" "$ENV_TARGET"
 
 # If an existing env file was created, set non-secret selected values without
 # overwriting any credentials or unrelated operator settings.
-python3 - "$ENV_TARGET" "$NODE_ID" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" "$ROOT" <<'PY'
+AWARESPAN_STATE_DIR="$STATE_DIR" python3 - "$ENV_TARGET" "$NODE_ID" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" "$ROOT" <<'PY'
 import os, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 node_id, backend_url, production, train, root = sys.argv[2:]
@@ -270,6 +337,8 @@ root = pathlib.Path(root)
 lines = path.read_text().splitlines() if path.exists() else []
 updates = {
     "PI_NODE_ID": node_id,
+    "MQTT_CLIENT_ID": node_id,
+    "AWARESPAN_STATE_DIR": os.environ.get("AWARESPAN_STATE_DIR", "") or str(root / ".state"),
     "ML_TRAINING_ENABLED": "true" if train == "yes" else "false",
     "ML_DATASET_DIR": str(root / "datasets"),
     "ML_CHECKPOINT_DIR": str(root / "models" / "working" / "training_runs"),
@@ -277,8 +346,6 @@ updates = {
 }
 if production == "yes":
     updates["BACKEND_API_URL"] = backend_url
-else:
-    updates["BACKEND_API_URL"] = ""
 seen = set()
 out = []
 for line in lines:
@@ -295,6 +362,60 @@ for key, value in updates.items():
 path.write_text("\n".join(out) + "\n")
 os.chmod(path, 0o600)
 PY
+
+if [[ "$TELEGRAM_BOT" == yes ]]; then
+  read_env_value() {
+    local key="$1"
+    if [[ -f "$ENV_TARGET" ]]; then
+      grep -m1 "^${key}=" "$ENV_TARGET" | cut -d= -f2- || true
+    fi
+  }
+  BOT_TOKEN_VALUE="${BOT_TOKEN:-$(read_env_value BOT_TOKEN)}"
+  PRIMARY_CHAT_ID_VALUE="${PRIMARY_CHAT_ID:-$(read_env_value PRIMARY_CHAT_ID)}"
+  ALLOWED_CHAT_IDS_VALUE="${ALLOWED_CHAT_IDS:-$(read_env_value ALLOWED_CHAT_IDS)}"
+  if [[ -z "$BOT_TOKEN_VALUE" && "$NON_INTERACTIVE" == 0 ]]; then
+    read -r -s -p "Telegram BOT_TOKEN from BotFather (input hidden): " BOT_TOKEN_VALUE
+    echo
+  fi
+  if [[ -z "$PRIMARY_CHAT_ID_VALUE" && "$NON_INTERACTIVE" == 0 && -z "$ALLOWED_CHAT_IDS_VALUE" ]]; then
+    read -r -p "Primary Telegram chat ID (numeric): " PRIMARY_CHAT_ID_VALUE
+  fi
+  BOT_TOKEN_VALUE="$BOT_TOKEN_VALUE" PRIMARY_CHAT_ID_VALUE="$PRIMARY_CHAT_ID_VALUE" \
+    ALLOWED_CHAT_IDS_VALUE="$ALLOWED_CHAT_IDS_VALUE" ENV_TARGET="$ENV_TARGET" "$PYTHON" - <<'PYTELEGRAM'
+import os, pathlib, re
+path = pathlib.Path(os.environ["ENV_TARGET"])
+token = os.environ.get("BOT_TOKEN_VALUE", "").strip()
+primary = os.environ.get("PRIMARY_CHAT_ID_VALUE", "").strip()
+allowed = os.environ.get("ALLOWED_CHAT_IDS_VALUE", "").strip()
+if not re.fullmatch(r"[0-9]{8,11}:[A-Za-z0-9_-]{35,}", token):
+    raise SystemExit("Invalid or missing Telegram BOT_TOKEN. Check the BotFather token and retry.")
+chat_ids = [item.strip() for item in allowed.split(",") if item.strip()]
+if primary and not re.fullmatch(r"-?[0-9]+", primary):
+    raise SystemExit("PRIMARY_CHAT_ID must be a numeric Telegram chat ID.")
+if any(not re.fullmatch(r"-?[0-9]+", item) for item in chat_ids):
+    raise SystemExit("ALLOWED_CHAT_IDS must be comma-separated numeric Telegram chat IDs.")
+if not primary and not chat_ids:
+    raise SystemExit("Set PRIMARY_CHAT_ID or ALLOWED_CHAT_IDS; unrestricted bot access is disabled.")
+updates = {"BOT_TOKEN": token, "PRIMARY_CHAT_ID": primary, "ALLOWED_CHAT_IDS": allowed}
+lines = path.read_text().splitlines()
+seen, out = set(), []
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key = line.split("=", 1)[0].strip()
+        if key in updates:
+            out.append(f"{key}={updates[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n")
+os.chmod(path, 0o600)
+PYTELEGRAM
+  unset BOT_TOKEN_VALUE PRIMARY_CHAT_ID_VALUE ALLOWED_CHAT_IDS_VALUE
+  echo "Optional Telegram operator bot configured. Only explicitly authorised chat IDs can interact with it."
+fi
 
 if [[ "$PRODUCTION" == yes ]]; then
   API_KEY="${BACKEND_API_KEY:-}"
@@ -364,11 +485,16 @@ else
 fi
 
 if [[ "$SERVICE" == yes ]]; then
-  sudo install -d -m 700 /etc/awarespan
-  INSTALL_USER="${SUDO_USER:-$(id -un)}"
-  INSTALL_GROUP="$(id -gn "$INSTALL_USER")"
-  sudo install -o "$INSTALL_USER" -g "$INSTALL_GROUP" -m 600 "$ENV_TARGET" /etc/awarespan/node.env
-  "$ROOT/scripts/install.sh"
+  AWARESPAN_ENV_FILE="$ENV_TARGET" "$ROOT/scripts/install.sh"
+fi
+if [[ "$PROFILE" == pi && "$SERVICE" == yes ]]; then
+  if [[ "$TELEGRAM_BOT" == yes ]]; then
+    AWARESPAN_ENV_FILE="$ENV_TARGET" "$ROOT/scripts/install-telegram-bot.sh"
+  else
+    # The operator bot is an optional, separate service. Disabling it never
+    # removes BOT_TOKEN because the same token may still power alert notices.
+    "$ROOT/scripts/uninstall-telegram-bot.sh"
+  fi
 fi
 
 echo
@@ -379,6 +505,15 @@ echo "  Python env    : $VENV"
 echo "  Private config: $ENV_TARGET"
 echo "  ML training   : $TRAIN"
 echo "  Production API: $PRODUCTION"
+echo "  Telegram bot  : $TELEGRAM_BOT"
+if [[ "$TELEGRAM_BOT" == yes ]]; then
+  if [[ "$PROFILE" == pi && "$SERVICE" == yes ]]; then
+    echo "  Telegram unit : awarespan-bot.service (enabled)"
+  else
+    echo "Run the optional bot manually:"
+    echo "  AWARESPAN_ENV_FILE='$ENV_TARGET' '$ROOT/pi/telegram_bot/run.sh'"
+  fi
+fi
 if [[ "$PROFILE" == linux ]]; then
   echo
   echo "Run locally:"

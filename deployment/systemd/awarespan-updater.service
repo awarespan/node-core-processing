@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=oneshot
 User=%USER%
 WorkingDirectory=%WORKDIR%
+Environment=AWARESPAN_ENV_FILE=%ENV_FILE%
 ExecStart=%PYTHON% -m node_manager.cli check-and-update
 StandardOutput=journal
 StandardError=journal

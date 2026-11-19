@@ -16,7 +16,7 @@ The same configuration can be selected without prompts:
 BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --production --no-train --non-interactive
 ```
 
-Configuration is stored at `~/.config/awarespan/node.env` with mode `0600`. It is not committed. Production REST sync uses `BACKEND_API_KEY`; MQTT is independent and is not enabled merely by selecting production REST.
+Configuration is stored in the repository-root `.env` with mode `0600`, shared by every component and ignored by Git. Production REST sync uses `BACKEND_API_KEY`; MQTT is independent and is not enabled merely by selecting production REST.
 
 ## 2. Verify and start the node
 
@@ -29,7 +29,7 @@ Configuration is stored at `~/.config/awarespan/node.env` with mode `0600`. It i
 Start terminal 1:
 
 ```bash
-AWARESPAN_ENV_FILE="$HOME/.config/awarespan/node.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
+AWARESPAN_ENV_FILE="$PWD/.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
 ```
 
 Start terminal 2:

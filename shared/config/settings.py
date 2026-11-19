@@ -31,26 +31,26 @@ REPO_ROOT = find_repo_root()
 
 def find_canonical_env() -> Optional[Path]:
     """
-    Locate the canonical root .env file.
+    Locate the one canonical AWARESPAN .env file.
     Resolution priority:
-    1. REPO_ROOT / .env
-    2. os.environ['AWARESPAN_ENV_FILE']
+    1. Explicit AWARESPAN_ENV_FILE (for systemd / controlled overrides)
+    2. REPO_ROOT / .env
     3. CWD / .env
-    4. ~/edge-ai/.env
-    5. ~/SIP/node-backend/.env
+    4. Legacy external config paths (migration compatibility only)
     """
     explicit = os.environ.get("AWARESPAN_ENV_FILE")
     if explicit and Path(explicit).is_file():
         return Path(explicit).resolve()
 
     candidates = [
+        REPO_ROOT / ".env",
+        Path.cwd() / ".env",
+        # Legacy locations are read only when the canonical repo .env is absent.
         Path("/etc/awarespan/node.env"),
         Path.home() / ".config" / "awarespan" / "node.env",
         Path.home() / ".awarespan" / "node.env",
         Path("/var/lib/awarespan/node.env"),
         Path.home() / "edge-ai" / ".env",
-        REPO_ROOT / ".env",
-        Path.cwd() / ".env",
     ]
 
     for candidate in candidates:
