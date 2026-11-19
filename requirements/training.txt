@@ -1,8 +1,5 @@
-# AWARESPAN ML Training Pipeline Requirements
-# Dedicated dependencies for model training, dataset preparation, and evaluation
+# AWARESPAN workstation ML training and dataset tooling.
+-c constraints-py311.txt
 -r runtime.txt
-kagglehub>=0.2.0
-matplotlib>=3.5.0
-scipy>=1.8.0
-pandas>=1.5.0
-roboflow>=1.1.0
+kagglehub==0.3.4
+roboflow==1.1.48

@@ -6,16 +6,18 @@
 ./scripts/setup.sh --profile linux --train
 ```
 
-Or install manually from the repository root:
+The supported interpreter is CPython 3.11. For a manual install, create the venv with `python3.11`, install the CPU PyTorch pair first, then the pinned requirements and the separately pinned Ultralytics wheel:
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements/training.txt
+python -m pip install --upgrade pip==24.3.1
+python -m pip install --only-binary=:all: --index-url https://download.pytorch.org/whl/cpu -r requirements/torch-cpu.txt
+python -m pip install --only-binary=:all: -r requirements/training.txt
+python -m pip install --only-binary=:all: --no-deps -r requirements/ultralytics.txt
 ```
 
-`requirements/training.txt` includes the runtime stack (including the pinned Ultralytics version) plus dataset, analysis and training utilities. For inference-only hosts, use `requirements/runtime.txt`. For workstation development/tests without training extras, use `requirements/dev.txt`.
+All direct runtime, development and training requirements are exact pins. `constraints-py311.txt` pins their shared transitive dependencies. Ultralytics is installed with `--no-deps` because it declares the GUI `opencv-python` distribution, while AWARESPAN uses `opencv-python-headless`; its other required dependencies are explicitly listed and pinned in `runtime.txt`. For inference-only hosts, use `requirements/runtime.txt`; for workstation development/tests without training extras, use `requirements/dev.txt`.
 
 ## Current deployed models
 

@@ -1,5 +1,6 @@
-# AWARESPAN Development & Testing Requirements
+# AWARESPAN workstation development and test dependencies.
+-c constraints-py311.txt
 -r runtime.txt
-pytest>=7.0.0
-pytest-mock>=3.10.0
-flake8>=6.0.0
+pytest==8.3.3
+pytest-mock==3.14.0
+flake8==7.1.1

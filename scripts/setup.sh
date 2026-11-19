@@ -5,6 +5,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="${AWARESPAN_VENV:-$ROOT/.venv}"
 PYTHON="${VENV}/bin/python"
+PYTHON_BOOTSTRAP="${AWARESPAN_PYTHON_BIN:-python3.11}"
+PYTHON_MINOR="3.11"
 PROFILE="auto"
 TRAIN=""
 PRODUCTION=""
@@ -20,6 +22,9 @@ AWARESPAN setup
 
 Usage:
   ./scripts/setup.sh [options]
+
+Requires CPython 3.11 (the version pinned by the model/test matrix). The installer
+uses python3.11 explicitly and never falls back to the system python3.
 
 Interactive by default: detects Raspberry Pi vs Linux and asks about ML training,
 production backend connectivity and (on a Pi) system services.
@@ -166,28 +171,59 @@ fi
 
 # Install host packages using the detected Linux package manager.
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y python3 python3-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2
+  sudo dnf install -y python3.11 python3.11-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
-  sudo apt-get install -y python3 python3-dev python3-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0
+  sudo apt-get install -y python3.11 python3.11-dev python3.11-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0
 elif command -v zypper >/dev/null 2>&1; then
-  sudo zypper --non-interactive install python3 python3-pip python3-devel gcc gcc-c++ make git curl libgomp1
+  sudo zypper --non-interactive install python311 python311-devel python311-pip gcc gcc-c++ make git curl libgomp1
 else
-  echo "Unsupported package manager. Install Python 3, venv/pip, Git, compiler tools and OpenCV runtime libraries manually." >&2
+  echo "Unsupported package manager. Install CPython 3.11 with venv/pip, Git, compiler tools and OpenCV runtime libraries manually." >&2
 fi
 
-python3 -m venv "$VENV"
-"$PYTHON" -m pip install --upgrade pip
-if [[ "$PROFILE" == pi ]]; then
-  "$PYTHON" -m pip install -r "$ROOT/requirements/runtime.txt"
-elif [[ "$TRAIN" == yes ]]; then
-  # A training workstation needs the complete runtime + developer/test stack
-  # as well as every dataset, analysis and training dependency.
-  "$PYTHON" -m pip install -r "$ROOT/requirements/dev.txt"
-  "$PYTHON" -m pip install -r "$ROOT/requirements/training.txt"
-else
-  "$PYTHON" -m pip install -r "$ROOT/requirements/dev.txt"
+if ! command -v "$PYTHON_BOOTSTRAP" >/dev/null 2>&1; then
+  echo "CPython 3.11 is required, but '$PYTHON_BOOTSTRAP' was not found." >&2
+  echo "Install Python 3.11 (Fedora: sudo dnf install python3.11; Debian: python3.11 python3.11-venv) and re-run." >&2
+  exit 2
 fi
+BOOTSTRAP_MINOR="$("$PYTHON_BOOTSTRAP" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ "$BOOTSTRAP_MINOR" != "$PYTHON_MINOR" ]]; then
+  echo "AWARESPAN requires CPython $PYTHON_MINOR; '$PYTHON_BOOTSTRAP' reports $BOOTSTRAP_MINOR." >&2
+  exit 2
+fi
+
+# Rebuild an old venv instead of silently continuing with an incompatible ABI.
+if [[ -x "$PYTHON" ]]; then
+  EXISTING_MINOR="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
+  if [[ "$EXISTING_MINOR" != "$PYTHON_MINOR" ]]; then
+    echo "Replacing existing Python ${EXISTING_MINOR:-unknown} environment with CPython $PYTHON_MINOR: $VENV"
+    rm -rf -- "$VENV"
+  fi
+fi
+"$PYTHON_BOOTSTRAP" -m venv "$VENV"
+VENV_MINOR="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ "$VENV_MINOR" != "$PYTHON_MINOR" ]]; then
+  echo "Virtual environment creation selected Python $VENV_MINOR; expected $PYTHON_MINOR." >&2
+  exit 2
+fi
+
+# Pin pip and install the CPU-only PyTorch pair first. The official CPU index
+# contains CPython 3.11 wheels for Linux x86_64 and aarch64.
+"$PYTHON" -m pip install --upgrade "pip==24.3.1"
+"$PYTHON" -m pip install --only-binary=:all: \
+  --index-url https://download.pytorch.org/whl/cpu \
+  -r "$ROOT/requirements/torch-cpu.txt"
+if [[ "$PROFILE" == pi ]]; then
+  "$PYTHON" -m pip install --only-binary=:all: -r "$ROOT/requirements/runtime.txt"
+elif [[ "$TRAIN" == yes ]]; then
+  # Training workstations get runtime + development/test + dataset tooling.
+  "$PYTHON" -m pip install --only-binary=:all: -r "$ROOT/requirements/dev.txt"
+  "$PYTHON" -m pip install --only-binary=:all: -r "$ROOT/requirements/training.txt"
+else
+  "$PYTHON" -m pip install --only-binary=:all: -r "$ROOT/requirements/dev.txt"
+fi
+# Avoid installing opencv-python: SIP deliberately uses the headless build.
+"$PYTHON" -m pip install --only-binary=:all: --no-deps -r "$ROOT/requirements/ultralytics.txt"
 
 mkdir -p "$(dirname "$ENV_TARGET")"
 chmod 700 "$(dirname "$ENV_TARGET")"
@@ -335,6 +371,7 @@ fi
 echo
 echo "Setup complete."
 echo "  Profile       : $PROFILE"
+echo "  Python        : CPython $PYTHON_MINOR"
 echo "  Python env    : $VENV"
 echo "  Private config: $ENV_TARGET"
 echo "  ML training   : $TRAIN"

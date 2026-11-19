@@ -1,0 +1,4 @@
+# Installed separately with --no-deps: Ultralytics declares opencv-python,
+# while this project deliberately uses opencv-python-headless. All other
+# Ultralytics 8.2.70 runtime dependencies are explicitly pinned in runtime.txt.
+ultralytics==8.2.70

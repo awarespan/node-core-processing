@@ -1,0 +1,4 @@
+# CPU-only PyTorch versions. Install this file from the official CPU index:
+# pip install --only-binary=:all: --index-url https://download.pytorch.org/whl/cpu -r requirements/torch-cpu.txt
+torch==2.5.1
+torchvision==0.20.1

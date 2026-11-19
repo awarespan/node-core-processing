@@ -6,7 +6,7 @@ This guide covers the production Raspberry Pi 5. The Pi performs inference and d
 
 - Raspberry Pi 5 (4 GB or better), adequate cooling and a suitable power supply.
 - microSD card (32 GB or larger recommended).
-- **Raspberry Pi OS Desktop (64-bit)**, selected in Raspberry Pi Imager.
+- **Raspberry Pi OS Desktop (64-bit, Bookworm)**, selected in Raspberry Pi Imager. AWARESPAN pins CPython 3.11 because the deployed PyTorch/torchvision stack has been validated against that interpreter; do not use a Python 3.13/3.15-only installation for this software baseline.
 
 In Imager customisation, set hostname `awarespan-pi`, username `benjamin`, timezone `Asia/Kolkata`, network credentials and SSH public-key authentication. Use a new Linux password; do not reuse any previously exposed password.
 
@@ -30,7 +30,7 @@ cd node-core-processing
 ./scripts/status.sh
 ```
 
-The wizard detects the Pi, installs `requirements/runtime.txt`, and can install the edge runtime, power monitor and updater systemd services. It does **not** install model training or the optional interactive Telegram bot. It asks whether to connect to production and securely prompts for the backend device API key when needed.
+The wizard detects the Pi, installs the CPython 3.11 venv, CPU-only PyTorch and pinned `requirements/runtime.txt` dependencies, then installs Ultralytics without pulling a second OpenCV distribution. It can install the edge runtime, power monitor and updater systemd services. It does **not** install model training or the optional interactive Telegram bot. It asks whether to connect to production and securely prompts for the backend device API key when needed.
 
 ## 4. Configure secrets
 

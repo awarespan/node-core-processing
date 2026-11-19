@@ -1,6 +1,6 @@
 # AWARESPAN evaluation guide
 
-AWARESPAN can run the same `node_runtime` software on a Raspberry Pi production node or a general Linux workstation. A workstation can also be explicitly configured to send REST incidents to the production backend for an end-to-end demonstration.
+AWARESPAN can run the same `node_runtime` software on a Raspberry Pi production node or a general Linux workstation. A workstation can also be explicitly configured to send REST incidents to the production backend for an end-to-end demonstration. The supported software baseline is CPython 3.11 with exact dependency pins and CPU-only PyTorch.
 
 ## 1. Prepare a Linux workstation
 
