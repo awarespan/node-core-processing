@@ -35,7 +35,7 @@ The autonomous update mechanism on the production Raspberry Pi 5 node was indepe
 ============================================================
  AWARESPAN Node Core — Remote State Audit
 ============================================================
- Node ID:           sip-pi-001
+ Node ID:           assigned by backend at enrollment
  Hardware:          Raspberry Pi 5 Model B Rev 1.1 (4 GB)
  Working Directory: /home/benjamin/SIP
  Canonical .env:    <repository>/.env (Mode 0600)

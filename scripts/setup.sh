@@ -5,15 +5,20 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="${AWARESPAN_VENV:-$ROOT/.venv}"
 PYTHON="${VENV}/bin/python"
-PYTHON_BOOTSTRAP="${AWARESPAN_PYTHON_BIN:-python3.11}"
-PYTHON_MINOR="3.11"
+if [[ -n "${AWARESPAN_PYTHON_BIN:-}" ]]; then
+  PYTHON_BOOTSTRAP="$AWARESPAN_PYTHON_BIN"
+elif command -v python3.11 >/dev/null 2>&1; then
+  PYTHON_BOOTSTRAP="python3.11"
+else
+  PYTHON_BOOTSTRAP="python3"
+fi
+PYTHON_MINOR=""
 PROFILE="auto"
 TRAIN=""
 PRODUCTION=""
 SERVICE=""
 TELEGRAM_BOT=""
 NON_INTERACTIVE=0
-NODE_ID=""
 BACKEND_URL="https://api.awarespan.bchbenjamin.in"
 ENV_TARGET=""
 
@@ -24,8 +29,8 @@ AWARESPAN setup
 Usage:
   ./scripts/setup.sh [options]
 
-Requires CPython 3.11 (the version pinned by the model/test matrix). The installer
-uses python3.11 explicitly and never falls back to the system python3.
+Requires CPython 3.11 or 3.12. The installer uses the host-supported interpreter
+(python3 by default) and validates its version before creating the virtualenv.
 
 Interactive by default: detects Raspberry Pi vs Linux and asks about ML training,
 production backend connectivity and (on a Pi) system services.
@@ -38,15 +43,13 @@ Options:
   --service / --no-service    Install/start Pi systemd services (Pi only)
   --telegram-bot / --no-telegram-bot
                               Configure the optional interactive Telegram bot
-  --node-id ID                Node identity (default: sip-pi-001 on Pi,
-                              sip-fedora-eval on other Linux)
   --backend-url URL           Backend base URL
   --env-file PATH             Write private node configuration to PATH
   --non-interactive           Do not prompt; defaults are safe/off unless flags set
   -h, --help                  Show this help
 
 Secrets are never accepted as command-line arguments. For automation, export
-BACKEND_API_KEY and optionally PI_DEVICE_SECRET before invoking this script.
+BACKEND_API_KEY before invoking this script; the backend issues PI_DEVICE_SECRET during enrollment.
 For an interactive production setup, the API key is requested with hidden input.
 
 Examples:
@@ -94,7 +97,6 @@ while (($#)); do
     --no-service) SERVICE=no; shift ;;
     --telegram-bot) TELEGRAM_BOT=yes; shift ;;
     --no-telegram-bot) TELEGRAM_BOT=no; shift ;;
-    --node-id) NODE_ID="${2:?Missing value for --node-id}"; shift 2 ;;
     --backend-url) BACKEND_URL="${2:?Missing value for --backend-url}"; shift 2 ;;
     --env-file) ENV_TARGET="${2:?Missing value for --env-file}"; shift 2 ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
@@ -118,19 +120,16 @@ if [[ "$PROFILE" == pi && "$IS_PI" != 1 ]]; then
   echo "Warning: --profile pi was selected but this host does not identify as a Raspberry Pi."
 fi
 if [[ "$PROFILE" == pi ]]; then
-  DEFAULT_NODE_ID="sip-pi-001"
   DEFAULT_TRAIN=no
   DEFAULT_SERVICE=yes
   DEFAULT_ENV="$ROOT/.env"
   STATE_DIR="/var/lib/awarespan"
 else
-  DEFAULT_NODE_ID="sip-fedora-eval"
   DEFAULT_TRAIN=no
   DEFAULT_SERVICE=no
   DEFAULT_ENV="$ROOT/.env"
   STATE_DIR="$HOME/.local/state/awarespan"
 fi
-NODE_ID="${NODE_ID:-$DEFAULT_NODE_ID}"
 ENV_TARGET="${ENV_TARGET:-$DEFAULT_ENV}"
 
 # Identify a legacy config before preflight so non-interactive setup can reuse
@@ -168,7 +167,7 @@ echo "AWARESPAN setup"
 echo "  OS / architecture : $OS / $ARCH"
 echo "  Hardware          : ${MODEL:-Generic Linux host}"
 echo "  Selected profile  : $PROFILE"
-echo "  Node identity     : $NODE_ID"
+echo "  Node identity     : assigned by backend during enrollment"
 
 if [[ -z "$TRAIN" ]]; then
   if [[ "$PROFILE" == pi ]]; then
@@ -239,26 +238,26 @@ fi
 
 # Install host packages using the detected Linux package manager.
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y python3.11 python3.11-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2
+  sudo dnf install -y python3 python3-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
-  sudo apt-get install -y python3.11 python3.11-dev python3.11-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0
+  sudo apt-get install -y python3 python3-dev python3-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0
 elif command -v zypper >/dev/null 2>&1; then
-  sudo zypper --non-interactive install python311 python311-devel python311-pip gcc gcc-c++ make git curl libgomp1
+  sudo zypper --non-interactive install python3 python3-devel python3-pip gcc gcc-c++ make git curl libgomp1
 else
-  echo "Unsupported package manager. Install CPython 3.11 with venv/pip, Git, compiler tools and OpenCV runtime libraries manually." >&2
+  echo "Unsupported package manager. Install CPython 3.11 or 3.12 with venv/pip, Git, compiler tools and OpenCV runtime libraries manually." >&2
 fi
 
 if ! command -v "$PYTHON_BOOTSTRAP" >/dev/null 2>&1; then
-  echo "CPython 3.11 is required, but '$PYTHON_BOOTSTRAP' was not found." >&2
-  echo "Install Python 3.11 (Fedora: sudo dnf install python3.11; Debian: python3.11 python3.11-venv) and re-run." >&2
+  echo "CPython 3.11 or 3.12 is required, but '$PYTHON_BOOTSTRAP' was not found." >&2
+  echo "Install the system Python 3 package with its venv and development packages, then re-run." >&2
   exit 2
 fi
 BOOTSTRAP_MINOR="$("$PYTHON_BOOTSTRAP" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-if [[ "$BOOTSTRAP_MINOR" != "$PYTHON_MINOR" ]]; then
-  echo "AWARESPAN requires CPython $PYTHON_MINOR; '$PYTHON_BOOTSTRAP' reports $BOOTSTRAP_MINOR." >&2
-  exit 2
-fi
+case "$BOOTSTRAP_MINOR" in
+  3.11|3.12) PYTHON_MINOR="$BOOTSTRAP_MINOR" ;;
+  *) echo "AWARESPAN supports CPython 3.11 or 3.12; '$PYTHON_BOOTSTRAP' reports $BOOTSTRAP_MINOR." >&2; exit 2 ;;
+esac
 
 # Rebuild an old venv instead of silently continuing with an incompatible ABI.
 if [[ -x "$PYTHON" ]]; then
@@ -329,15 +328,17 @@ fi
 
 # If an existing env file was created, set non-secret selected values without
 # overwriting any credentials or unrelated operator settings.
-AWARESPAN_STATE_DIR="$STATE_DIR" python3 - "$ENV_TARGET" "$NODE_ID" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" "$ROOT" <<'PY'
+AWARESPAN_STATE_DIR="$STATE_DIR" python3 - "$ENV_TARGET" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" "$ROOT" <<'PY'
 import os, pathlib, sys
 path = pathlib.Path(sys.argv[1])
-node_id, backend_url, production, train, root = sys.argv[2:]
+backend_url, production, train, root = sys.argv[2:]
 root = pathlib.Path(root)
 lines = path.read_text().splitlines() if path.exists() else []
 updates = {
-    "PI_NODE_ID": node_id,
-    "MQTT_CLIENT_ID": node_id,
+    # The backend owns the public node identity and per-node secret.
+    "PI_NODE_ID": "",
+    "PI_DEVICE_SECRET": "",
+    "MQTT_CLIENT_ID": "",
     "AWARESPAN_STATE_DIR": os.environ.get("AWARESPAN_STATE_DIR", "") or str(root / ".state"),
     "ML_TRAINING_ENABLED": "true" if train == "yes" else "false",
     "ML_DATASET_DIR": str(root / "datasets"),
@@ -478,8 +479,7 @@ p.write_text("\n".join(out) + "\n")
 os.chmod(p, 0o600)
 PY
   unset API_KEY DEVICE_SECRET
-  echo "Production REST sync enabled for node $NODE_ID."
-  echo "Use a distinct node ID for this Linux host; do not run it concurrently as sip-pi-001."
+  echo "Production REST sync enabled. The backend assigns node identity during enrollment."
 else
   echo "Production backend connection disabled."
 fi

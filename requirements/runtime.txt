@@ -1,4 +1,4 @@
-# AWARESPAN runtime dependencies — exact versions for CPython 3.11.
+# AWARESPAN runtime dependencies — exact versions for CPython 3.11/3.12.
 -c constraints-py311.txt
 
 # CPU inference stack (install requirements/torch-cpu.txt from the official CPU wheel index first).
@@ -17,7 +17,8 @@ pandas==2.2.3
 seaborn==0.13.2
 ultralytics-thop==2.0.12
 
-# Edge communications and configuration
+# HTTP + WebSocket gateway, edge communications and configuration
+aiohttp==3.10.11
 paho-mqtt==2.1.0
-websockets==13.1
+websockets==15.0.1
 python-dotenv==1.0.1

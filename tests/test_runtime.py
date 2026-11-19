@@ -111,8 +111,12 @@ def test_backend_sync_headers_and_endpoints(monkeypatch):
     mock_post.return_value = mock_resp
     monkeypatch.setattr(requests, "post", mock_post)
 
-    sync = BackendSync(api_url="https://api.awarespan.example.com", api_key="test-api-key")
-    assert sync.headers["X-API-Key"] == "test-api-key"
+    sync = BackendSync(api_url="https://api.awarespan.example.com", api_key="test-api-key", auto_enroll=False)
+    sync.node_id = "node-test-01"
+    sync.device_secret = "test-device-secret"
+    sync.ready = True
+    sync.headers.update({"X-Node-Id": sync.node_id, "X-Device-Secret": sync.device_secret})
+    assert "X-API-Key" not in sync.headers  # Global key is enrollment-only.
     assert sync.headers["X-Node-Id"] == sync.node_id
     assert sync.headers["X-Device-Secret"] == sync.device_secret
 

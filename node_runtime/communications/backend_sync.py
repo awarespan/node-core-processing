@@ -9,6 +9,7 @@ Contact: awarespan@bchbenjamin.in
 """
 
 import json
+import os
 import sqlite3
 import time
 import uuid
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
+from dotenv import set_key
 
 from shared.config.settings import get_settings
 from shared.logging.logger import get_logger
@@ -220,26 +222,93 @@ class IncidentQueue:
 class BackendSync:
     """REST synchronization with AWARESPAN central API."""
 
-    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
-        settings = get_settings()
-        self.api_url = (api_url or settings.backend_api_url).rstrip("/")
-        self.api_key = api_key if api_key is not None else settings.backend_api_key
-        self.node_id = settings.node_id
-        self.device_secret = settings.device_secret
+    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None,
+                 auto_enroll: bool = True):
+        self.settings = get_settings()
+        self.api_url = (api_url or self.settings.backend_api_url).rstrip("/")
+        self.api_key = api_key if api_key is not None else self.settings.backend_api_key
+        if auto_enroll:
+            self._enroll_with_backend()
+        self.node_id = self.settings.node_id
+        self.device_secret = self.settings.device_secret
+        self.ready = bool(self.node_id and self.device_secret)
 
         self.headers = {
             "Content-Type": "application/json",
             "User-Agent": "AWARESPAN-Edge-Node/2.0",
-            "X-Node-Id": self.node_id,
-            "X-Device-Secret": self.device_secret,
         }
-        if self.api_key:
-            self.headers["X-API-Key"] = self.api_key
+        if self.ready:
+            self.headers["X-Node-Id"] = self.node_id
+            self.headers["X-Device-Secret"] = self.device_secret
+
+    def _enroll_with_backend(self) -> bool:
+        """Obtain the public node ID, display name and per-node secret from the backend."""
+        if not self.api_url or not self.api_key:
+            log.warning("Node enrollment skipped: BACKEND_API_URL or BACKEND_API_KEY is missing")
+            self.settings.node_id = ""
+            self.settings.device_secret = ""
+            return False
+
+        state_dir = Path(self.settings.state_dir).expanduser()
+        try:
+            state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            os.chmod(state_dir, 0o700)
+            installation_file = state_dir / "installation_id"
+            installation_id = ""
+            if installation_file.is_file():
+                candidate = installation_file.read_text().strip()
+                try:
+                    installation_id = str(uuid.UUID(candidate))
+                except (ValueError, AttributeError):
+                    installation_id = ""
+            if not installation_id:
+                installation_id = str(uuid.uuid4())
+                installation_file.write_text(installation_id + "\n")
+                os.chmod(installation_file, 0o600)
+            response = requests.post(
+                f"{self.api_url}/api/v1/nodes/enroll",
+                json={"installationId": installation_id},
+                headers={"Content-Type": "application/json", "X-API-Key": self.api_key},
+                timeout=10,
+            )
+            if response.status_code != 200:
+                log.error("Backend node enrollment failed (HTTP %d): %s", response.status_code, response.text[:200])
+                self.settings.node_id = ""
+                self.settings.device_secret = ""
+                return False
+            data = response.json()
+            node_id = str(data.get("nodeId") or "").strip()
+            device_secret = str(data.get("deviceSecret") or "").strip()
+            if not node_id or not device_secret:
+                log.error("Backend node enrollment response omitted its assigned identity or device credential")
+                self.settings.node_id = ""
+                self.settings.device_secret = ""
+                return False
+
+            self.settings.node_id = node_id
+            self.settings.device_secret = device_secret
+            self.settings.mqtt_client_id = node_id
+            os.environ["PI_NODE_ID"] = node_id
+            os.environ["PI_DEVICE_SECRET"] = device_secret
+            os.environ["MQTT_CLIENT_ID"] = node_id
+            env_file = self.settings.env_file_path
+            if env_file and Path(env_file).is_file():
+                set_key(str(env_file), "PI_NODE_ID", node_id)
+                set_key(str(env_file), "PI_DEVICE_SECRET", device_secret)
+                set_key(str(env_file), "MQTT_CLIENT_ID", node_id)
+                os.chmod(env_file, 0o600)
+            log.info("Node enrolled successfully; backend assigned identity %s", node_id)
+            return True
+        except Exception as exc:
+            log.error("Backend node enrollment failed: %s", exc)
+            self.settings.node_id = ""
+            self.settings.device_secret = ""
+            return False
 
     def send_incident(self, event: ThreatEvent, model: str = "", deterrence: Optional[Dict[str, Any]] = None) -> bool:
         """Transmit incident to backend REST endpoint /api/v1/incidents."""
-        if not self.api_url:
-            log.debug("BACKEND_API_URL not configured; skipping REST incident sync.")
+        if not self.api_url or not self.ready:
+            log.debug("Backend unavailable or node not enrolled; skipping REST incident sync.")
             return False
         url = f"{self.api_url}/api/v1/incidents"
         labels = {str(label).lower() for label in event.labels}
@@ -309,7 +378,7 @@ class BackendSync:
 
     def send_heartbeat(self, extra: Optional[Dict[str, Any]] = None) -> bool:
         """Transmit heartbeat to backend REST endpoint /api/v1/nodes/{nodeId}/heartbeat."""
-        if not self.api_url:
+        if not self.api_url or not self.ready:
             return False
         url = f"{self.api_url}/api/v1/nodes/{self.node_id}/heartbeat"
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -332,7 +401,7 @@ class BackendSync:
 
     def get_pending_commands(self) -> List[Dict[str, Any]]:
         """Fetch pending commands from central backend."""
-        if not self.api_url:
+        if not self.api_url or not self.ready:
             return []
         url = f"{self.api_url}/api/v1/commands/pending/{self.node_id}"
         try:
@@ -347,7 +416,7 @@ class BackendSync:
 
     def acknowledge_command(self, command_id: str) -> bool:
         """Acknowledge completed command to central backend."""
-        if not self.api_url:
+        if not self.api_url or not self.ready:
             return False
         url = f"{self.api_url}/api/v1/commands/{command_id}/acknowledge"
         try:
@@ -358,7 +427,7 @@ class BackendSync:
 
     def report_media_result(self, media_id: str, result: Dict[str, Any]) -> bool:
         """Report inference / processing results for test media job."""
-        if not self.api_url:
+        if not self.api_url or not self.ready:
             return False
         url = f"{self.api_url}/api/v1/media/{media_id}/result"
         try:

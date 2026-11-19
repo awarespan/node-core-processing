@@ -47,8 +47,9 @@ class EventQueueManager:
 
     def start(self) -> None:
         """Initialize communication subsystems and start heartbeat/replay thread."""
-        self.mqtt = init_mqtt(on_command=self._handle_command)
+        # Enroll first so MQTT topics and client identity use the backend-issued node ID.
         self.backend = BackendSync()
+        self.mqtt = init_mqtt(on_command=self._handle_command)
         self.queue = IncidentQueue()
         self._running = True
 

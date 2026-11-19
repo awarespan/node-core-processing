@@ -122,7 +122,9 @@ def test_linux_setup_option_matrix(tmp_path):
         config = case_dir / ".env"
         assert stat.S_IMODE(config.stat().st_mode) == 0o600
         assert values["AWARESPAN_STATE_DIR"] == str(case_dir / "home/.local/state/awarespan")
-        assert values["PI_NODE_ID"] == "sip-fedora-eval"
+        assert values["PI_NODE_ID"] == ""
+        assert values["PI_DEVICE_SECRET"] == ""
+        assert values["MQTT_CLIENT_ID"] == ""
         assert not (home / ".config/awarespan/node.env").exists()
         assert values["BACKEND_API_KEY"] == ("smoke-test-key" if production else "")
         assert "# COMMON" in config.read_text()
@@ -165,20 +167,27 @@ def test_noninteractive_production_requires_api_key_before_install(tmp_path):
     assert not log.exists()
 
 
-def test_custom_node_backend_and_env_file_options(tmp_path):
+def test_custom_backend_env_file_and_backend_owned_identity(tmp_path):
     custom_env = tmp_path / "operator-config" / "node.env"
     result, _, log = _run_setup(
-        tmp_path, "--train", "--production", "--node-id", "workstation-smoke",
+        tmp_path, "--train", "--production",
         "--backend-url", "https://backend.example.test", "--env-file", str(custom_env),
         api_key="smoke-test-key",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert any("requirements/training.txt" in line for line in log.read_text().splitlines())
     values = _config_values(custom_env)
-    assert values["PI_NODE_ID"] == "workstation-smoke"
+    assert values["PI_NODE_ID"] == ""
+    assert values["PI_DEVICE_SECRET"] == ""
     assert values["BACKEND_API_URL"] == "https://backend.example.test"
     assert values["BACKEND_API_KEY"] == "smoke-test-key"
-    assert values["MQTT_CLIENT_ID"] == "workstation-smoke"
+    assert values["MQTT_CLIENT_ID"] == ""
+
+    reject_dir = tmp_path / "reject-node-id"
+    reject_dir.mkdir()
+    rejected, _, _ = _run_setup(reject_dir, "--no-production", "--no-train", "--node-id", "manual-id")
+    assert rejected.returncode == 2
+    assert "Unknown option: --node-id" in rejected.stderr
 
 
 def test_noninteractive_telegram_bot_uses_the_shared_env_file(tmp_path):
@@ -203,7 +212,7 @@ def test_noninteractive_telegram_bot_uses_the_shared_env_file(tmp_path):
 def test_unsupported_python_fails_before_creating_environment(tmp_path):
     result, _, log = _run_setup(tmp_path, "--no-production", "--no-train", python_minor="3.15")
     assert result.returncode == 2
-    assert "requires CPython 3.11" in result.stderr
+    assert "supports CPython 3.11 or 3.12" in result.stderr
     assert not log.exists()
     assert not (tmp_path / "venv").exists()
 
@@ -244,17 +253,17 @@ def test_dependency_files_are_exactly_pinned():
                 )
             pinned_versions[package_name] = version
     expected_packages = {
-        "certifi", "charset-normalizer", "contourpy", "cycler", "filelock",
-        "filetype", "flake8", "fonttools", "fsspec", "idna", "iniconfig",
+        "aiohappyeyeballs", "aiohttp", "aiosignal", "attrs", "certifi", "charset-normalizer", "contourpy", "cycler", "filelock",
+        "filetype", "flake8", "fonttools", "frozenlist", "fsspec", "idna", "iniconfig",
         "jinja2", "kagglehub", "kiwisolver", "markupsafe", "matplotlib",
-        "mccabe", "mpmath", "networkx", "numpy", "opencv-python-headless",
+        "mccabe", "mpmath", "multidict", "networkx", "numpy", "opencv-python-headless",
         "packaging", "paho-mqtt", "pandas", "pillow", "pip", "pluggy", "psutil",
         "py-cpuinfo", "pycodestyle", "pyflakes", "pygments", "pyparsing",
         "pytest", "pytest-mock", "python-dateutil", "python-dotenv", "pytz",
-        "pyyaml", "requests", "requests-toolbelt", "roboflow", "scipy", "setuptools",
+        "pyyaml", "propcache", "requests", "requests-toolbelt", "roboflow", "scipy", "setuptools",
         "seaborn", "six", "sympy", "torch", "torchvision", "tqdm", "triton",
         "typing-extensions", "tzdata", "ultralytics", "ultralytics-thop",
-        "urllib3", "websockets", "wheel",
+        "urllib3", "websockets", "wheel", "yarl",
     }
     assert pinned_packages == expected_packages, (
         f"Dependency inventory changed; missing={expected_packages - pinned_packages}, "

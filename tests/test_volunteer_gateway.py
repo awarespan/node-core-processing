@@ -262,8 +262,29 @@ def test_live_gateway_http_pairing_websocket_and_binary_frame_pipeline(tmp_path)
         await gateway.start()
         try:
             port = gateway._server.sockets[0].getsockname()[1]
+            base_url = f"http://127.0.0.1:{port}"
+
+            def request_get(path, headers=None, method="GET"):
+                request = urllib.request.Request(base_url + path, method=method, headers=headers or {})
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    return response.status, response.headers, response.read()
+
+            root_status, root_headers, _ = await asyncio.to_thread(request_get, "/")
+            assert root_status == 200
+            assert "text/html" in root_headers.get("Content-Type", "")
+            config_status, _, config_body = await asyncio.to_thread(request_get, "/api/volunteer/config")
+            assert config_status == 200
+            assert json.loads(config_body.decode("utf-8"))["ok"] is True
+            options_status, options_headers, _ = await asyncio.to_thread(
+                request_get, "/api/volunteer/auth",
+                {"Origin": "https://portal.example.test", "Access-Control-Request-Method": "POST"},
+                "OPTIONS",
+            )
+            assert options_status == 200
+            assert options_headers.get("Access-Control-Allow-Origin") == "*"
+
             code, _ = auth_mgr.get_current_token()
-            auth_url = f"http://127.0.0.1:{port}/api/volunteer/auth"
+            auth_url = f"{base_url}/api/volunteer/auth"
 
             def request_pairing_token():
                 request = urllib.request.Request(

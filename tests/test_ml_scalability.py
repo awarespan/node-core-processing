@@ -80,7 +80,8 @@ def test_unified_setup_replaces_the_fedora_only_profile():
     setup = ROOT / "scripts" / "setup.sh"
     assert setup.is_file()
     source = setup.read_text(encoding="utf-8")
-    assert 'DEFAULT_NODE_ID="sip-fedora-eval"' in source
+    assert 'assigned by backend during enrollment' in source
+    assert '--node-id' not in source
     assert 'BACKEND_API_KEY' in source
     assert '--production' in source and '--no-production' in source
     assert '--train' in source and '--no-train' in source

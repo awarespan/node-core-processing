@@ -31,7 +31,7 @@ jobs:
       - name: Run full test suite
         run: python -m pytest -q
       - name: Validate Pi model artifacts
-        run: python scripts/validate_ml_deployment.py --profile pi5_edge
+        run: python ml_pipeline/tools/validate_deployment.py --profile pi5_edge
 
   model-smoke:
     runs-on: ubuntu-latest
@@ -49,4 +49,4 @@ jobs:
           python -m pip install --only-binary=:all: -r requirements/runtime.txt
           python -m pip install --only-binary=:all: --no-deps -r requirements/ultralytics.txt
       - name: Load and run active Pi models
-        run: python scripts/smoke_test_models.py
+        run: python ml_pipeline/tools/smoke_test_models.py

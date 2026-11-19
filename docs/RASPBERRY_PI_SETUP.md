@@ -37,13 +37,13 @@ The wizard detects the Pi, installs the CPython 3.11 venv, CPU-only PyTorch and 
 Keep one canonical device environment in the repository-root `.env`, copied from `.env.example` and protected with mode `0600`. The node runtime, updater, power monitor and optional Telegram service all read this same file; no `/etc/awarespan/node.env` or `~/.config/awarespan/node.env` copy is created. Existing legacy node.env files are migrated into the root `.env` by setup when needed. Configure:
 
 - `BACKEND_API_URL`
-- `PI_NODE_ID` (production identity: `sip-pi-001`)
+- `PI_NODE_ID` (backend-assigned at enrollment; do not set manually)
 - `BACKEND_API_KEY` (the same value configured as `DEVICE_API_KEY` on the backend)
 - `PI_DEVICE_SECRET` (optional per-node secret, if the backend node record uses one)
 - MQTT broker credentials, if used
 - `BOT_TOKEN`, `PRIMARY_CHAT_ID` and/or `ALLOWED_CHAT_IDS` for the optional operator bot
 
-Do not invent credentials, commit environment files, or print secrets in logs. Only one online device may use `sip-pi-001` at a time.
+Do not invent credentials, commit environment files, or print secrets in logs. The backend assigns each installation a unique node ID during enrollment; do not manually set `PI_NODE_ID` or `PI_DEVICE_SECRET`.
 
 ## 5. Production services
 

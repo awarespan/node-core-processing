@@ -23,7 +23,7 @@ Verify model files, run inference smoke tests and execute the automated tests:
 .venv/bin/python -m pytest -q
 ```
 
-For production REST demonstration, explicitly enable it during setup and provide the backend's device API key. Use a distinct workstation node ID; never impersonate the physical Pi concurrently. MQTT remains a separately configured integration.
+For production REST demonstration, explicitly enable it during setup and provide the backend's device API key. The backend assigns a distinct node ID to every enrolled installation. MQTT remains a separately configured integration.
 
 See [`EVALUATION_GUIDE.md`](EVALUATION_GUIDE.md) for runtime and webcam commands.
 

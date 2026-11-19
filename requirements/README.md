@@ -1,6 +1,6 @@
 # Python dependency management
 
-AWARESPAN's supported interpreter baseline is **CPython 3.11** (`.python-version`).
+AWARESPAN's supported interpreter baseline is **CPython 3.11 or 3.12 or 3.12** (`.python-version`).
 The dependency manifests are intentionally exact-pinned: package upgrades are
 reviewed changes, not something pip should choose during setup.
 
@@ -19,7 +19,7 @@ reviewed changes, not something pip should choose during setup.
 All active dependency files use `==` pins. Across the runtime, development,
 training, inference and shared transitive manifests, the current baseline pins
 58 exact package-version pins: 55 application/runtime packages plus the three installer tools (`pip`, `setuptools` and `wheel`). The dependency metadata for the selected package
-versions was audited for CPython 3.11 on Linux x86-64 and ARM64; every declared dependency
+versions was audited for CPython 3.11 or 3.12 or 3.12 on Linux x86-64 and ARM64; every declared dependency
 is pinned or has an explicit platform-specific reason for exclusion. The
 constraints file ensures that transitive dependencies resolved by pip do not
 drift independently of the reviewed baseline. The PyTorch pair is installed first from
@@ -58,7 +58,7 @@ does not install developer or training packages.
 3. Run the setup smoke suite and full suite: `./scripts/test.sh setup` and
    `./scripts/test.sh all`.
 4. Run pip's wheel-only resolver against the runtime, development and training
-   manifests on CPython 3.11. Do not merge if it needs a source build or reports
+   manifests on CPython 3.11 or 3.12 or 3.12. Do not merge if it needs a source build or reports
    a resolution conflict.
 5. Record the package upgrade in the commit message and this manifest if the
    supported interpreter/platform assumptions changed.

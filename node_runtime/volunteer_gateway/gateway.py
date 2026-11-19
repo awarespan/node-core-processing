@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import websockets
+from aiohttp import WSMsgType, web
 
 try:
     from websockets.http11 import Response
@@ -51,6 +52,41 @@ from node_runtime.volunteer_gateway.tunnel.tunnel_manager import get_tunnel_mana
 log = get_logger("volunteer_gateway.core")
 
 
+class _AiohttpWebSocketAdapter:
+    """Expose aiohttp's WebSocketResponse through the small interface used by the handler."""
+
+    def __init__(self, websocket: web.WebSocketResponse, request: web.Request):
+        self._websocket = websocket
+        self.request = request
+        self.remote_address = (request.remote, 0) if request.remote else None
+
+    def __aiter__(self):
+        return self._messages()
+
+    async def _messages(self):
+        async for message in self._websocket:
+            if message.type == WSMsgType.TEXT:
+                yield message.data
+            elif message.type == WSMsgType.BINARY:
+                yield message.data
+            elif message.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING):
+                break
+            elif message.type == WSMsgType.ERROR:
+                error = self._websocket.exception()
+                if error:
+                    raise error
+                break
+
+    async def send(self, data):
+        if isinstance(data, bytes):
+            await self._websocket.send_bytes(data)
+        else:
+            await self._websocket.send_str(str(data))
+
+    async def close(self, code=1000, reason=""):
+        await self._websocket.close(code=code, message=str(reason).encode("utf-8"))
+
+
 class VolunteerGatewayServer:
     """Standalone or integrated LAN-first volunteer camera/microphone ingestion gateway."""
 
@@ -78,6 +114,8 @@ class VolunteerGatewayServer:
         )
         self.api = VolunteerPortalAPI(self.auth_mgr, self.session_mgr, self.registry)
         self._server = None
+        self._runner = None
+        self._site = None
         self._stop_event = asyncio.Event()
 
     async def _process_http_request(self, *args, **kwargs):
@@ -461,28 +499,85 @@ class VolunteerGatewayServer:
             log.warning("Could not initialize SSL context: %s; falling back to plaintext HTTP", exc)
             return None
 
-    async def start(self) -> None:
-        """Start the volunteer gateway server."""
-        ssl_ctx = self._get_ssl_context() if self.use_tls else None
-        proto = "https/wss" if ssl_ctx else "http/ws"
+    def _cors_headers(self):
+        return {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-TOTP-Code, X-Volunteer-Capability, X-Operator-ID",
+            "Access-Control-Max-Age": "600",
+            "Vary": "Origin",
+        }
 
-        self._server = await websockets.serve(
-            self._handle_websocket,
-            self.host,
-            self.port,
-            process_request=self._process_http_request,
-            ssl=ssl_ctx,
-            max_size=2**24,
-            ping_interval=15,
-            ping_timeout=20,
-        )
-        log.info("AWARESPAN Volunteer Media Gateway active on %s://%s:%d", proto, self.host, self.port)
+    async def _http_auth(self, request: web.Request):
+        if request.method == "OPTIONS":
+            return web.Response(status=200, headers=self._cors_headers())
+        status, data = self.api.handle_auth_request({
+            "totp_code": request.headers.get("X-TOTP-Code", ""),
+            "capability": request.headers.get("X-Volunteer-Capability", "both"),
+            "operator_id": request.headers.get("X-Operator-ID", ""),
+        }, request.remote or "127.0.0.1")
+        return web.json_response(data, status=status, headers=self._cors_headers())
+
+    async def _http_root(self, request: web.Request):
+        status, content_type, body = self.api.render_portal_html()
+        media_type = content_type.split(";", 1)[0].strip()
+        return web.Response(status=status, text=body, content_type=media_type,
+                            charset="utf-8", headers=self._cors_headers())
+
+    async def _http_options(self, request: web.Request):
+        return web.Response(status=200, headers=self._cors_headers())
+
+    async def _http_config(self, request: web.Request):
+        status, data = self.api.handle_config_request()
+        return web.json_response(data, status=status, headers=self._cors_headers())
+
+    async def _http_sources(self, request: web.Request):
+        status, data = self.api.handle_status_request()
+        return web.json_response(data, status=status, headers=self._cors_headers())
+
+    async def _http_static(self, request: web.Request):
+        result = self.api.render_static_file("/" + request.match_info.get("path", ""))
+        if not result:
+            raise web.HTTPNotFound()
+        status, content_type, body = result
+        return web.Response(status=status, body=body, content_type=content_type, headers=self._cors_headers())
+
+    async def _http_websocket(self, request: web.Request):
+        websocket = web.WebSocketResponse(max_msg_size=2**24, heartbeat=15)
+        await websocket.prepare(request)
+        await self._handle_websocket(_AiohttpWebSocketAdapter(websocket, request))
+        return websocket
+
+    async def start(self) -> None:
+        """Start one HTTP server for REST + WebSocket routes on the same port."""
+        ssl_ctx = self._get_ssl_context() if self.use_tls else None
+        app = web.Application(client_max_size=2**24)
+        app.router.add_route("GET", "/ws/volunteer", self._http_websocket)
+        app.router.add_route("GET", "/", self._http_root)
+        app.router.add_route("GET", "/index.html", self._http_root)
+        app.router.add_route("POST", "/api/volunteer/auth", self._http_auth)
+        app.router.add_route("OPTIONS", "/api/volunteer/auth", self._http_auth)
+        app.router.add_route("GET", "/api/volunteer/config", self._http_config)
+        app.router.add_route("GET", "/api/volunteer/sources", self._http_sources)
+        app.router.add_route("OPTIONS", "/{path:.*}", self._http_options)
+        app.router.add_route("GET", "/{path:.*}", self._http_static)
+
+        self._runner = web.AppRunner(app, access_log=None)
+        await self._runner.setup()
+        self._site = web.TCPSite(self._runner, self.host, self.port, ssl_context=ssl_ctx)
+        await self._site.start()
+        self._server = self._site._server
+        bound_port = self._server.sockets[0].getsockname()[1]
+        proto = "https/wss" if ssl_ctx else "http/ws"
+        log.info("AWARESPAN Volunteer Media Gateway active on %s://%s:%d", proto, self.host, bound_port)
 
     async def stop(self) -> None:
-        """Stop the volunteer gateway server."""
-        if self._server:
-            self._server.close()
-            await self._server.wait_closed()
+        """Stop the HTTP and WebSocket listener."""
+        if self._runner:
+            await self._runner.cleanup()
+            self._runner = None
+            self._site = None
+            self._server = None
             log.info("Volunteer Media Gateway stopped.")
 
 

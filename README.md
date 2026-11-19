@@ -48,7 +48,7 @@ In terminal 2, send webcam frames to it:
 
 For a phone or another LAN client, bind the runtime to `0.0.0.0`, allow the port through the host firewall, and use the workstation's LAN IP. Do not expose the runtime directly to the public internet.
 
-A Linux workstation can connect to production REST APIs when explicitly configured. Use a distinct node ID such as `sip-fedora-eval`; never run two devices concurrently with the same `sip-pi-001` identity. Production REST API authentication uses the backend `DEVICE_API_KEY`, stored locally as `BACKEND_API_KEY`. MQTT is a separate integration and remains unconfigured unless its broker settings and per-node credentials are supplied.
+A Linux workstation can connect to production REST APIs when explicitly configured. The backend assigns each installation its own public node ID and display name during enrollment; nodes cannot select either value. The global `DEVICE_API_KEY` is stored locally as `BACKEND_API_KEY` and used only for enrollment. The backend returns the node ID and per-node secret; subsequent REST calls use that credential. MQTT is a separate integration and requires broker configuration.
 
 ## Raspberry Pi production
 

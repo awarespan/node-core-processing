@@ -62,6 +62,10 @@ class PiMqttClient:
             log.warning("paho-mqtt is not installed in this environment; running in mock mode.")
             return False
 
+        if not self.node_id or not self.device_secret:
+            log.error("MQTT connection blocked: this node has not received its backend-assigned identity and device secret")
+            return False
+
         if not self.broker_url:
             log.info("MQTT_BROKER_URL not configured; skipping MQTT connection.")
             return False
