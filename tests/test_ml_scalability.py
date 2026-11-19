@@ -76,22 +76,17 @@ def test_training_is_confined_to_workstation_package():
     assert not (ROOT / "pi" / "train_autonomous.py").exists()
 
 
-def test_fedora_profile_isolated_from_production_node():
-    profile = {}
-    for line in (ROOT / "config" / "fedora.env").read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        profile[key] = value
-    assert profile["PI_NODE_ID"] == "sip-fedora-eval"
-    assert profile["BACKEND_API_URL"] == ""
-    assert profile["BACKEND_API_KEY"] == ""
-    assert profile["PI_DEVICE_SECRET"] == ""
-    assert profile["MQTT_BROKER_URL"] == ""
-    assert profile["ML_TRAINING_ENABLED"].lower() == "false"
-    assert profile["SIREN_ENABLED"].lower() == "false"
-    assert profile["SPEAKER_ENABLED"].lower() == "false"
+def test_unified_setup_replaces_the_fedora_only_profile():
+    setup = ROOT / "scripts" / "setup.sh"
+    assert setup.is_file()
+    source = setup.read_text(encoding="utf-8")
+    assert 'DEFAULT_NODE_ID="sip-fedora-eval"' in source
+    assert 'BACKEND_API_KEY' in source
+    assert '--production' in source and '--no-production' in source
+    assert '--train' in source and '--no-train' in source
+    assert 'DEVICE_API_KEY' in source
+    assert not (ROOT / "scripts" / "fedora.sh").exists()
+    assert not (ROOT / "config" / "fedora.env").exists()
 
 
 def test_production_installer_excludes_training_and_optional_bot():

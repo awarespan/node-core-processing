@@ -7,7 +7,7 @@ This directory contains **operator entrypoints for the deployed Raspberry Pi**. 
 - `./pi/run-node.sh` — starts `node_runtime.main`, the edge inference and decision runtime.
 - `./pi/run-power-monitor.sh` — starts the Pi power/thermal monitor.
 
-The production installer is `./scripts/install.sh`. It installs only the node runtime, power monitor and updater services. It does not install ML training or the optional Telegram bot.
+The supported installer is `./scripts/setup.sh --profile pi`. It installs runtime dependencies and optionally the node runtime, power monitor and updater services. It never installs ML training or the optional Telegram bot.
 
 ## Optional temporary Telegram bot
 
@@ -22,7 +22,7 @@ Model training, dataset downloads, dataset registration and batch evaluation bel
 After Raspberry Pi OS Desktop 64-bit has completed first boot, install the runtime with:
 
 ```bash
-./scripts/install.sh
+./scripts/setup.sh --profile pi
 ./scripts/status.sh
 ```
 

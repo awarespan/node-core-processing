@@ -1,39 +1,35 @@
 # AWARESPAN threat testing guide
 
-The production Raspberry Pi performs inference only. Model training and dataset preparation are workstation-side activities. The active edge profile is defined in `models/deployed/manifest.json` and currently uses:
+The active edge profile is defined in `models/deployed/manifest.json` and currently uses:
 
 - `shared/models/yolov8n_best_weapon.pt` — fine-tuned gun/knife detector.
 - `shared/models/yolov8n.pt` — COCO baseline filtered to person/dog.
 
 The person/dog baseline remains provisional until validated using representative camera footage. A model file and a successful inference call do not establish safety-critical accuracy.
 
-## Fedora software demonstration
+## Linux software demonstration
 
-Use the documented local fallback rather than legacy Pi scripts:
-
-```bash
-./scripts/fedora.sh setup
-./scripts/fedora.sh models
-./scripts/fedora.sh test
-
-# Terminal 1
-./scripts/fedora.sh run
-
-# Terminal 2
-./scripts/fedora.sh camera --camera 0 --fps 8
-```
-
-For a one-shot fixture-based inference and local queue demonstration:
+Prepare the host with the unified setup wizard:
 
 ```bash
-./scripts/fedora.sh demo
+./scripts/setup.sh --profile linux
 ```
 
-See [`EVALUATION_GUIDE.md`](EVALUATION_GUIDE.md) for the exact scope and limitations.
+Verify model files, run inference smoke tests and execute the automated tests:
+
+```bash
+.venv/bin/python ml_pipeline/tools/validate_deployment.py --profile pi5_edge
+.venv/bin/python ml_pipeline/tools/smoke_test_models.py
+.venv/bin/python -m pytest -q
+```
+
+For production REST demonstration, explicitly enable it during setup and provide the backend's device API key. Use a distinct workstation node ID; never impersonate the physical Pi concurrently. MQTT remains a separately configured integration.
+
+See [`EVALUATION_GUIDE.md`](EVALUATION_GUIDE.md) for runtime and webcam commands.
 
 ## Raspberry Pi hardware acceptance
 
-When the Pi is available, verify the actual camera, microphone, GPIO, power/thermal monitor, speaker/amplifier, backend connectivity and sustained inference. Do not claim those hardware paths were tested on Fedora.
+When the Pi is available, verify the actual camera, microphone, GPIO, power/thermal monitor, speaker/amplifier, backend connectivity and sustained inference. Do not claim those hardware paths were tested on a workstation.
 
 Speaker output is fail-closed by default (`SPEAKER_ENABLED=false`, `SIREN_ENABLED=false`, `PRESENCE_DETERRENCE_ENABLED=false`). Do not enable it until the installed speaker/amplifier has been physically verified and acoustic SPL measured at representative listener positions. The current audible tone is not a validated deterrent.
 

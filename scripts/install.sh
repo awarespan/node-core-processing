@@ -111,7 +111,7 @@ if command -v systemctl >/dev/null 2>&1 && [[ -d "/run/systemd/system" ]]; then
 
     if command -v getenforce >/dev/null 2>&1 && [[ "$(getenforce 2>/dev/null || true)" == "Enforcing" ]]; then
         echo "NOTE: SELinux is Enforcing (e.g. Fedora). If systemd units fail to execute from ${REPO_ROOT},"
-        echo "      either run user-space via ./scripts/fedora.sh run or relabel with:"
+        echo "      run the workstation profile with ./scripts/setup.sh --profile linux or relabel with:"
         echo "      sudo chcon -R -t bin_t \"${VENV_PATH}/bin\""
     fi
 

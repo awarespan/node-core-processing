@@ -1,6 +1,55 @@
 # AWARESPAN — Edge Node
 
-AWARESPAN is an edge safety node for multimodal media ingestion, visual inference, threat assessment, deterrence control and backend synchronization. The production target is Raspberry Pi 5 (64-bit Raspberry Pi OS).
+AWARESPAN is an edge safety node for media ingestion, visual inference, threat assessment, deterrence control and backend synchronization. Raspberry Pi 5 (64-bit Raspberry Pi OS) is the production target; ordinary Linux workstations can run the same software for development and demonstrations.
+
+## One setup command
+
+Clone the repository, enter it, and run:
+
+```bash
+./scripts/setup.sh
+```
+
+The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, and (on a Pi) install system services. Safe defaults are used: production connectivity and training are off unless selected. The script creates a private configuration file outside Git.
+
+The same choices are available as flags for automation:
+
+```bash
+# Raspberry Pi production install (interactive credentials if needed)
+./scripts/setup.sh --profile pi --no-train --production --service
+
+# Fedora/Ubuntu workstation, production API enabled, no training
+BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --production --no-train --non-interactive
+
+# Workstation prepared for ML training, isolated from production
+./scripts/setup.sh --profile linux --train --no-production
+```
+
+Secrets must never be passed as command-line arguments. For non-interactive setup, export `BACKEND_API_KEY` (the backend's `DEVICE_API_KEY`) and optionally `PI_DEVICE_SECRET` in the environment. Interactive setup prompts for the API key with hidden input. The resulting config is stored at `/etc/awarespan/node.env` on a Pi or `~/.config/awarespan/node.env` on another Linux host, with mode `0600`.
+
+See [`scripts/README.md`](scripts/README.md) for all flags and [`docs/EVALUATION_GUIDE.md`](docs/EVALUATION_GUIDE.md) for a workstation demo.
+
+## Run on a Linux workstation
+
+After setup, start the node in terminal 1 (replace the config path if you selected a custom `--env-file`):
+
+```bash
+AWARESPAN_ENV_FILE="$HOME/.config/awarespan/node.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
+```
+
+In terminal 2, send webcam frames to it:
+
+```bash
+.venv/bin/python laptop/stream_client.py --pi-host 127.0.0.1 --pi-port 8766 --camera 0 --fps 8
+```
+
+For a phone or another LAN client, bind the runtime to `0.0.0.0`, allow the port through the host firewall, and use the workstation's LAN IP. Do not expose the runtime directly to the public internet.
+
+A Linux workstation can connect to production REST APIs when explicitly configured. Use a distinct node ID such as `sip-fedora-eval`; never run two devices concurrently with the same `sip-pi-001` identity. Production REST API authentication uses the backend `DEVICE_API_KEY`, stored locally as `BACKEND_API_KEY`. MQTT is a separate integration and remains unconfigured unless its broker settings and per-node credentials are supplied.
+
+## Raspberry Pi production
+
+Use Raspberry Pi OS Desktop 64-bit, complete first boot, clone this repository and run `./scripts/setup.sh`. The Pi profile installs runtime dependencies and can install the production systemd services. It never installs ML training dependencies. See [`docs/RASPBERRY_PI_SETUP.md`](docs/RASPBERRY_PI_SETUP.md).
 
 ## Architecture
 
@@ -8,84 +57,37 @@ AWARESPAN is an edge safety node for multimodal media ingestion, visual inferenc
 node_runtime/       Production inference and edge application logic (no training)
 node_manager/       Health checks, update orchestration and rollback
 shared/             Runtime configuration, event models, logging and utilities
-shared/models/      Versioned deployment weights used by Pi and Fedora
+shared/models/      Versioned deployment weights used by Pi and Linux workstations
 models/             Deployment manifest, checksums and model registry
-pi/                 Raspberry Pi launchers and operator-only integrations
-pi/telegram_bot/    Temporary, optional interactive Telegram bot (not auto-enabled)
-ml_pipeline/        Workstation-side ML datasets, training, evaluation and packaging
-datasets/           Small committed fixtures/manifests; large private datasets stay external
-deployment/         Production Raspberry Pi systemd and sudoers templates
-scripts/            Small operator command surface
-laptop/             Webcam sender used by the Fedora fallback
+pi/                 Raspberry Pi launchers and optional temporary Telegram bot
+ml_pipeline/        Workstation-side datasets, training, evaluation and packaging
+datasets/           Small committed fixtures/manifests; private datasets stay external
+deployment/         Raspberry Pi systemd and sudoers templates
+scripts/            Setup wizard and operator commands
+laptop/             Webcam sender for Linux workstation demonstrations
 static/             Volunteer portal assets
-
-docs/               All project and deployment documentation
+docs/               Project and deployment documentation
 ```
 
-## Choose your environment
+## Models and ML lifecycle
 
-### Raspberry Pi 5 — production
-
-After Raspberry Pi OS Desktop 64-bit has completed first boot:
+The committed deployment weights are in `shared/models/`; `models/deployed/manifest.json` declares their paths and SHA-256 checksums. Validate them with:
 
 ```bash
-./scripts/install.sh
-./scripts/status.sh
+.venv/bin/python ml_pipeline/tools/validate_deployment.py --profile pi5_edge
+.venv/bin/python ml_pipeline/tools/smoke_test_models.py
 ```
 
-The Pi performs inference and device operations only. **Model training is not installed or started by the production installer.** The interactive Telegram bot is optional and separate.
-
-See [Pi deployment instructions](docs/RASPBERRY_PI_SETUP.md) and [Pi entrypoints](pi/README.md).
-
-### Fedora laptop — evaluation fallback
-
-This runs the node runtime locally without Raspberry Pi hardware, systemd, or production credentials by default:
-
-```bash
-./scripts/fedora.sh setup
-./scripts/fedora.sh models
-./scripts/fedora.sh test
-```
-
-Terminal 1 — start the local node:
-
-```bash
-./scripts/fedora.sh run
-```
-
-Terminal 2 — stream the laptop webcam into it:
-
-```bash
-./scripts/fedora.sh camera --camera 0 --fps 8
-```
-
-The local profile uses the distinct node ID `sip-fedora-eval`, stores state under `~/.local/state/awarespan-fedora`, and disables backend/MQTT credentials by default. It is a software evaluation fallback, not proof of Pi boot, GPIO, camera-module, power-monitor or acoustic hardware behaviour. For LAN camera clients, set `AWARESPAN_FEDORA_HOST=0.0.0.0` before starting the runtime.
-
-See [evaluation guide](docs/EVALUATION_GUIDE.md).
-
-## Model weights
-
-Committed deployment artifacts live in `shared/models/`. Their paths and SHA-256 checksums are declared in `models/deployed/manifest.json`. Verify them with:
-
-```bash
-./scripts/fedora.sh models
-```
-
-## ML training
-
-Training is a separate workstation workflow under `ml_pipeline/training/`; it is not part of the Pi runtime or Pi installation. Install `requirements/training.txt` on a dedicated workstation. Only promote validated weights into `shared/models/` and update the deployment manifest.
-
-See [ML pipeline documentation](ml_pipeline/README.md).
-
-## Configuration and secrets
-
-Copy `.env.example` to a secure external configuration location. Never commit `.env`, bot tokens, device secrets, MQTT credentials, TOTP secrets or SSH credentials. The Fedora fallback uses the committed, credential-free `config/fedora.env` profile and does not load production `.env` values.
+The smoke test loads the actual weights and performs local inference; it requires the runtime ML dependencies and can be slow on CPU. Training is a separate, explicit workstation workflow. Installing training dependencies does not mean a dataset is ready or a training job is approved. See [`ml_pipeline/README.md`](ml_pipeline/README.md).
 
 ## Tests
 
 ```bash
-./scripts/fedora.sh test
-./scripts/fedora.sh models
+.venv/bin/python -m pytest -q
 ```
 
-Tests on Fedora verify host-side software only. Physical Pi and peripheral checks must be performed when the hardware is available.
+Software tests on a workstation do not verify Pi boot, CSI camera, GPIO, audio hardware, thermal/power behaviour or sustained ARM inference. Those checks require the physical Pi.
+
+## Secrets and local state
+
+Never commit `.env`, `node.env`, API keys, device secrets, bot tokens, MQTT credentials, TOTP secrets or SSH credentials. Keep local configuration under `/etc/awarespan/` or `~/.config/awarespan/` with restrictive permissions. Training datasets, caches and run outputs should remain outside Git unless explicitly reviewed for publication.

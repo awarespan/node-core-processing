@@ -2,15 +2,41 @@
 
 Run scripts from any working directory; each resolves the repository root itself.
 
+## Unified setup wizard
+
+`./scripts/setup.sh` is the supported entrypoint for Raspberry Pi and general Linux hosts. It detects hardware/OS, installs host packages and Python dependencies, writes a private environment file, and optionally enables production REST connectivity. It asks questions by default; use flags for repeatable automation.
+
+| Flag | Meaning |
+|---|---|
+| `--profile auto|pi|linux` | Detect automatically or force a target profile |
+| `--train` / `--no-train` | Install or omit workstation ML training dependencies |
+| `--production` / `--no-production` | Enable or disable production backend REST sync |
+| `--service` / `--no-service` | Install/start Pi systemd services; Pi profile only |
+| `--node-id ID` | Set this machine's unique node identity |
+| `--backend-url URL` | Override the production backend URL |
+| `--env-file PATH` | Choose the private configuration path |
+| `--non-interactive` | Disable prompts; only explicitly selected options are enabled |
+
+Secrets are not accepted as command-line arguments. Interactive production setup asks for the backend's `DEVICE_API_KEY` with hidden input. Automation should export `BACKEND_API_KEY` and optionally `PI_DEVICE_SECRET` before running setup. The script stores these in the private env file with mode `0600`.
+
+Examples:
+
+```bash
+./scripts/setup.sh
+./scripts/setup.sh --profile pi --no-train --production --service
+BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --production --no-train --non-interactive
+./scripts/setup.sh --profile linux --train --no-production
+```
+
+A workstation should use a distinct ID (default `sip-fedora-eval`) rather than impersonating `sip-pi-001`. Production REST authentication uses the shared backend `DEVICE_API_KEY` as `BACKEND_API_KEY`. MQTT remains separate and requires its own broker configuration and node credentials.
+
+## Other operator commands
+
 | Script | Purpose | Target |
 |---|---|---|
-| `install.sh` | Install production dependencies and systemd services | Raspberry Pi OS |
-| `fedora.sh setup` | Prepare a local Python environment | Fedora workstation |
-| `fedora.sh run` | Run the node runtime locally without systemd | Fedora workstation |
-| `fedora.sh test` | Run the automated test suite | Fedora workstation |
-| `fedora.sh models` | Verify model artifacts and run CPU inference smoke tests | Fedora workstation |
 | `status.sh` | Inspect installed services and node health | Raspberry Pi |
 | `update.sh` / `rollback.sh` | Manage a deployed node revision | Raspberry Pi |
 | `uninstall.sh` | Remove deployed services (optional `--purge`) | Raspberry Pi |
+| `evaluation_demo.py` | Run fixture-based local evaluation | Linux workstation |
 
-Specialist tools live outside the normal operator surface: `pi/setup-ap.sh`, `tools/deploy_frontend.sh`, `tools/provision_totp.py`, `scripts/evaluation_demo.py`, and `ml_pipeline/tools/`.
+Specialist tools live under `pi/`, `tools/` and `ml_pipeline/tools/`.

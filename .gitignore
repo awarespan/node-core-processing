@@ -71,6 +71,3 @@ runs/
 .coverage
 htmlcov/
 *.egg-info/
-
-# This credential-free profile is intentionally versioned for the Fedora fallback.
-!config/fedora.env

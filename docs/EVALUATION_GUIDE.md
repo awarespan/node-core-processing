@@ -1,57 +1,63 @@
 # AWARESPAN evaluation guide
 
-AWARESPAN has two execution targets: Raspberry Pi 5 for production edge operation, and Fedora x86-64 for a software evaluation fallback when the Pi is unavailable.
+AWARESPAN can run the same `node_runtime` software on a Raspberry Pi production node or a general Linux workstation. A workstation can also be explicitly configured to send REST incidents to the production backend for an end-to-end demonstration.
 
-## A. Fedora laptop fallback
-
-The Fedora path runs the same `node_runtime` application and committed model artifacts locally. It uses a separate node identity, local state and no production backend/MQTT credentials by default.
-
-### Prepare
+## 1. Prepare a Linux workstation
 
 ```bash
-./scripts/fedora.sh setup
-./scripts/fedora.sh models
-./scripts/fedora.sh test
+./scripts/setup.sh --profile linux
 ```
 
-### Start the node
+The wizard asks whether to install ML training dependencies and whether to connect to production. For an isolated demo, answer no to production. To demonstrate production REST synchronization, answer yes and provide the backend `DEVICE_API_KEY` when prompted. The workstation defaults to the distinct node identity `sip-fedora-eval`; do not reuse `sip-pi-001` while the physical Pi may be online.
 
-Terminal 1:
+The same configuration can be selected without prompts:
 
 ```bash
-./scripts/fedora.sh run
+BACKEND_API_KEY="$DEVICE_API_KEY" ./scripts/setup.sh --profile linux --production --no-train --non-interactive
 ```
 
-The local WebSocket runtime listens on `127.0.0.1:8766` by default. It uses `sip-fedora-eval`, stores data under `~/.local/state/awarespan-fedora`, and disables hardware deterrence. It does not connect to production backend or MQTT services unless explicitly configured.
+Configuration is stored at `~/.config/awarespan/node.env` with mode `0600`. It is not committed. Production REST sync uses `BACKEND_API_KEY`; MQTT is independent and is not enabled merely by selecting production REST.
 
-### Send camera frames
-
-Terminal 2:
+## 2. Verify and start the node
 
 ```bash
-./scripts/fedora.sh camera --camera 0 --fps 8
+.venv/bin/python ml_pipeline/tools/validate_deployment.py --profile pi5_edge
+.venv/bin/python ml_pipeline/tools/smoke_test_models.py
+.venv/bin/python -m pytest -q
 ```
 
-This uses the laptop webcam as the camera source and streams frames to the local runtime. For a phone or another LAN client, start the runtime with `AWARESPAN_FEDORA_HOST=0.0.0.0` and connect to the laptop's LAN IP.
-
-### Run a one-shot inference/queue demo
+Start terminal 1:
 
 ```bash
-./scripts/fedora.sh demo
+AWARESPAN_ENV_FILE="$HOME/.config/awarespan/node.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
 ```
 
-This exercises the committed model and local event-queue path using the repository fixture.
+Start terminal 2:
 
-## B. Raspberry Pi 5 evaluation
+```bash
+.venv/bin/python laptop/stream_client.py --pi-host 127.0.0.1 --pi-port 8766 --camera 0 --fps 8
+```
 
-When the Pi is available, complete first boot and install using [`RASPBERRY_PI_SETUP.md`](RASPBERRY_PI_SETUP.md). Use the Pi's own camera, microphone and configured network. Verify model checksums, service health and actual sensor ingestion.
+For a phone or another LAN client, bind the runtime to `0.0.0.0`, open the port only on the trusted LAN, and connect to the workstation's LAN IP. Do not expose the runtime directly to the public internet.
 
-## C. What Fedora can and cannot prove
+## 3. Production backend demonstration
 
-Fedora can demonstrate application startup, model loading/inference (when ML dependencies are installed), webcam ingestion, threat assessment, local queueing, and API/communications contracts in isolated or explicitly configured test mode.
+When production REST connectivity was enabled in setup, the runtime uses the configured backend URL, `BACKEND_API_KEY`, and node ID. Confirm the new workstation node appears in the backend after an actual incident is sent. Use a unique node ID for each concurrently running device. Do not share API keys in screenshots, logs or terminal recordings.
 
-Fedora cannot prove Raspberry Pi boot firmware, ARM64 package compatibility, CSI camera operation, Pi GPIO, `vcgencmd` power monitoring, speaker hardware, Pi thermal behaviour, or sustained Pi inference performance. Label those checks as pending until tested on the physical Pi.
+A successful REST API sync does not imply MQTT is connected. MQTT needs its own broker URL, credentials and per-node authentication configuration. It also does not validate Pi-specific hardware.
 
-## D. Safety and credentials
+## 4. Raspberry Pi production
 
-The Fedora profile is deliberately isolated from `sip-pi-001`. Do not reuse the production node identity while the physical Pi may be online. Do not enable speaker/siren output on a laptop. Do not put production credentials in the repository or the committed Fedora profile.
+When the Pi is available, run the same setup wizard using the Pi profile:
+
+```bash
+./scripts/setup.sh --profile pi
+```
+
+See [`RASPBERRY_PI_SETUP.md`](RASPBERRY_PI_SETUP.md) for first boot and hardware acceptance.
+
+## 5. What a workstation can and cannot prove
+
+A Linux workstation can demonstrate application startup, local model loading/inference, webcam ingestion, threat assessment, local queueing and explicitly configured production REST synchronization.
+
+It cannot prove Pi boot firmware, ARM64 package compatibility, CSI camera operation, Pi GPIO, `vcgencmd` power monitoring, speaker hardware, Pi thermal behaviour or sustained Pi inference performance. Label those checks as pending until tested on the physical Pi. Keep speaker/siren/deterrence disabled on a workstation.

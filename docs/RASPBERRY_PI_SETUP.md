@@ -26,19 +26,20 @@ Clone the canonical repository and install:
 ```bash
 git clone https://github.com/awarespan/node-core-processing.git
 cd node-core-processing
-./scripts/install.sh
+./scripts/setup.sh --profile pi
 ./scripts/status.sh
 ```
 
-The installer installs `requirements/runtime.txt`, the edge runtime, power monitor and updater. It does **not** install or enable model training or the optional interactive Telegram bot.
+The wizard detects the Pi, installs `requirements/runtime.txt`, and can install the edge runtime, power monitor and updater systemd services. It does **not** install model training or the optional interactive Telegram bot. It asks whether to connect to production and securely prompts for the backend device API key when needed.
 
 ## 4. Configure secrets
 
-Keep the device environment outside Git, preferably `/etc/awarespan/node.env` with mode `0600`. Populate the existing, issued values for:
+Keep the device environment outside Git. The wizard creates a private config in `~/.config/awarespan/node.env` and installs a service-readable copy at `/etc/awarespan/node.env` owned by the node operator for systemd, both protected with mode `0600`. Configure:
 
 - `BACKEND_API_URL`
 - `PI_NODE_ID` (production identity: `sip-pi-001`)
-- `PI_DEVICE_SECRET` or `BACKEND_API_KEY`, as required by the backend
+- `BACKEND_API_KEY` (the same value configured as `DEVICE_API_KEY` on the backend)
+- `PI_DEVICE_SECRET` (optional per-node secret, if the backend node record uses one)
 - MQTT broker credentials, if used
 - Telegram notification credentials, if notifications are enabled
 
