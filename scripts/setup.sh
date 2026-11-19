@@ -155,7 +155,7 @@ if [[ -z "$SERVICE" ]]; then
   else SERVICE=no
   fi
 fi
-if [[ "$TRAIN" == yes && ( "$IS_PI" == 1 || "$ARCH" == aarch64 || "$ARCH" == arm64 || "$ARCH" == armv7l || "$ARCH" == armv6l ) ]]; then
+if [[ "$TRAIN" == yes && ( "$PROFILE" == pi || "$ARCH" == aarch64 || "$ARCH" == arm64 || "$ARCH" == armv7l || "$ARCH" == armv6l ) ]]; then
   echo "ML training is restricted to x86-64 workstations; ARM edge devices are inference-only." >&2
   exit 2
 fi
@@ -181,6 +181,9 @@ python3 -m venv "$VENV"
 if [[ "$PROFILE" == pi ]]; then
   "$PYTHON" -m pip install -r "$ROOT/requirements/runtime.txt"
 elif [[ "$TRAIN" == yes ]]; then
+  # A training workstation needs the complete runtime + developer/test stack
+  # as well as every dataset, analysis and training dependency.
+  "$PYTHON" -m pip install -r "$ROOT/requirements/dev.txt"
   "$PYTHON" -m pip install -r "$ROOT/requirements/training.txt"
 else
   "$PYTHON" -m pip install -r "$ROOT/requirements/dev.txt"
@@ -210,6 +213,9 @@ SIREN_ENABLED=false
 SPEAKER_ENABLED=false
 PRESENCE_DETERRENCE_ENABLED=false
 ML_TRAINING_ENABLED=$([[ "$TRAIN" == yes ]] && echo true || echo false)
+ML_DATASET_DIR=$ROOT/datasets
+ML_CHECKPOINT_DIR=$ROOT/models/working/training_runs
+ML_DEPLOYMENT_MANIFEST=models/deployed/manifest.json
 AWARESPAN_AUTO_UPDATE_ENABLED=false
 EOF
   chmod 600 "$ENV_TARGET"
@@ -217,12 +223,19 @@ fi
 
 # If an existing env file was created, set non-secret selected values without
 # overwriting any credentials or unrelated operator settings.
-python3 - "$ENV_TARGET" "$NODE_ID" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" <<'PY'
+python3 - "$ENV_TARGET" "$NODE_ID" "$BACKEND_URL" "$PRODUCTION" "$TRAIN" "$ROOT" <<'PY'
 import os, pathlib, sys
 path = pathlib.Path(sys.argv[1])
-node_id, backend_url, production, train = sys.argv[2:]
+node_id, backend_url, production, train, root = sys.argv[2:]
+root = pathlib.Path(root)
 lines = path.read_text().splitlines() if path.exists() else []
-updates = {"PI_NODE_ID": node_id, "ML_TRAINING_ENABLED": "true" if train == "yes" else "false"}
+updates = {
+    "PI_NODE_ID": node_id,
+    "ML_TRAINING_ENABLED": "true" if train == "yes" else "false",
+    "ML_DATASET_DIR": str(root / "datasets"),
+    "ML_CHECKPOINT_DIR": str(root / "models" / "working" / "training_runs"),
+    "ML_DEPLOYMENT_MANIFEST": "models/deployed/manifest.json",
+}
 if production == "yes":
     updates["BACKEND_API_URL"] = backend_url
 else:

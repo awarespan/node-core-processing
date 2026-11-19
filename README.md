@@ -10,7 +10,7 @@ Clone the repository, enter it, and run:
 ./scripts/setup.sh
 ```
 
-The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, and (on a Pi) install system services. Safe defaults are used: production connectivity and training are off unless selected. The script creates a private configuration file outside Git.
+The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, and (on a Pi) install system services. Selecting ML training installs the complete development/test stack plus the dedicated training requirements (including the runtime stack), and writes the dataset, checkpoint and deployment-manifest paths into the private node configuration. Safe defaults are used: production connectivity and training are off unless selected. The script creates a private configuration file outside Git.
 
 The same choices are available as flags for automation:
 

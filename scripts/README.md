@@ -4,7 +4,7 @@ Run scripts from any working directory; each resolves the repository root itself
 
 ## Unified setup wizard
 
-`./scripts/setup.sh` is the supported entrypoint for Raspberry Pi and general Linux hosts. It detects hardware/OS, installs host packages and Python dependencies, writes a private environment file, and optionally enables production REST connectivity. It asks questions by default; use flags for repeatable automation.
+`./scripts/setup.sh` is the supported entrypoint for Raspberry Pi and general Linux hosts. It detects hardware/OS, installs host packages and Python dependencies, writes a private environment file, and optionally enables production REST connectivity. On a workstation, `--train` installs both `requirements/dev.txt` and `requirements/training.txt`; the latter includes the full runtime stack and the training/data/evaluation packages. The generated config includes `ML_TRAINING_ENABLED`, `ML_DATASET_DIR`, `ML_CHECKPOINT_DIR` and `ML_DEPLOYMENT_MANIFEST`. It asks questions by default; use flags for repeatable automation.
 
 | Flag | Meaning |
 |---|---|
