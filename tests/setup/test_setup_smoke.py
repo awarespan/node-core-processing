@@ -5,7 +5,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest
+
+pytestmark = pytest.mark.setup
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run_setup(tmp_path, *options, api_key=None, profile="linux", python_minor="3.11", old_venv_minor=None):
@@ -79,15 +83,19 @@ def test_linux_setup_option_matrix(tmp_path):
                                        api_key="smoke-test-key" if production else None)
         assert result.returncode == 0, result.stdout + result.stderr
         install_lines = log.read_text().splitlines()
-        assert "-m pip install --upgrade pip==24.3.1" in install_lines
+        bootstrap_install = next(i for i, line in enumerate(install_lines)
+                                 if "requirements/bootstrap.txt" in line)
         torch_install = next(i for i, line in enumerate(install_lines)
                              if "--index-url https://download.pytorch.org/whl/cpu" in line)
         runtime_install = next(i for i, line in enumerate(install_lines)
                                if "requirements/dev.txt" in line)
         ultralytics_install = next(i for i, line in enumerate(install_lines)
                                    if "requirements/ultralytics.txt" in line)
-        assert torch_install < runtime_install < ultralytics_install
+        assert bootstrap_install < torch_install < runtime_install < ultralytics_install
+        assert "--only-binary=:all:" in install_lines[bootstrap_install]
+        assert "requirements/constraints-py311.txt" in install_lines[bootstrap_install]
         assert "requirements/torch-cpu.txt" in install_lines[torch_install]
+        assert "requirements/constraints-py311.txt" in install_lines[torch_install]
         assert "--only-binary=:all:" in install_lines[torch_install]
         assert (any("requirements/training.txt" in line for line in install_lines)) is train
         assert any("--no-deps" in line and "requirements/ultralytics.txt" in line
@@ -110,6 +118,8 @@ def test_pi_profile_installs_runtime_without_training_or_dev(tmp_path):
                                 profile="pi")
     assert result.returncode == 0, result.stdout + result.stderr
     install_lines = log.read_text().splitlines()
+    assert any("requirements/bootstrap.txt" in line for line in install_lines)
+    assert any("requirements/torch-cpu.txt" in line for line in install_lines)
     assert any("requirements/runtime.txt" in line for line in install_lines)
     assert not any("requirements/training.txt" in line for line in install_lines)
     assert not any("requirements/dev.txt" in line for line in install_lines)
@@ -165,17 +175,63 @@ def test_unsupported_python_fails_before_creating_environment(tmp_path):
 def test_dependency_files_are_exactly_pinned():
     assert (ROOT / ".python-version").read_text().strip() == "3.11"
     requirement_files = [
-        ROOT / "requirements/runtime.txt", ROOT / "requirements/dev.txt",
+        ROOT / "requirements/bootstrap.txt", ROOT / "requirements/runtime.txt", ROOT / "requirements/dev.txt",
         ROOT / "requirements/training.txt", ROOT / "requirements/constraints-py311.txt",
         ROOT / "requirements/ultralytics.txt", ROOT / "requirements/torch-cpu.txt",
     ]
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+
+    pinned_packages = set()
+    pinned_versions = {}
     for path in requirement_files:
         for line in path.read_text().splitlines():
             line = line.strip()
-            if not line or line.startswith("#") or line.startswith(("-r ", "-c ")):
+            if not line or line.startswith("#"):
                 continue
-            assert "==" in line, f"Version is not exact in {path.name}: {line}"
+            if line.startswith(("-r ", "-c ")):
+                included = ROOT / "requirements" / line.split(maxsplit=1)[1]
+                assert included.is_file(), f"Missing included manifest: {included}"
+                continue
+            requirement = Requirement(line)
+            package_name = canonicalize_name(requirement.name)
+            pinned_packages.add(package_name)
+            specifiers = list(requirement.specifier)
+            assert len(specifiers) == 1 and specifiers[0].operator == "==", (
+                f"Version is not an exact pin in {path.name}: {line}"
+            )
+            version = specifiers[0].version
+            if package_name in pinned_versions:
+                assert pinned_versions[package_name] == version, (
+                    f"Conflicting versions for {package_name}: "
+                    f"{pinned_versions[package_name]} vs {version}"
+                )
+            pinned_versions[package_name] = version
+    expected_packages = {
+        "certifi", "charset-normalizer", "contourpy", "cycler", "filelock",
+        "filetype", "flake8", "fonttools", "fsspec", "idna", "iniconfig",
+        "jinja2", "kagglehub", "kiwisolver", "markupsafe", "matplotlib",
+        "mccabe", "mpmath", "networkx", "numpy", "opencv-python-headless",
+        "packaging", "paho-mqtt", "pandas", "pillow", "pip", "pluggy", "psutil",
+        "py-cpuinfo", "pycodestyle", "pyflakes", "pygments", "pyparsing",
+        "pytest", "pytest-mock", "python-dateutil", "python-dotenv", "pytz",
+        "pyyaml", "requests", "requests-toolbelt", "roboflow", "scipy", "setuptools",
+        "seaborn", "six", "sympy", "torch", "torchvision", "tqdm", "triton",
+        "typing-extensions", "tzdata", "ultralytics", "ultralytics-thop",
+        "urllib3", "websockets", "wheel",
+    }
+    assert pinned_packages == expected_packages, (
+        f"Dependency inventory changed; missing={expected_packages - pinned_packages}, "
+        f"added={pinned_packages - expected_packages}. Review and update the lock inventory."
+    )
     assert "ultralytics==8.2.70" in (ROOT / "requirements/ultralytics.txt").read_text()
+    runtime_pins = (ROOT / "requirements/runtime.txt").read_text()
+    shared_constraints = (ROOT / "requirements/constraints-py311.txt").read_text()
+    assert "numpy==1.26.4" in shared_constraints
+    assert "pillow==10.4.0" in shared_constraints
+    assert "opencv-python-headless==4.10.0.84" in runtime_pins
+    assert "opencv-python==" not in runtime_pins
+    assert "--no-deps" in (ROOT / "scripts/setup.sh").read_text()
     torch_pins = (ROOT / "requirements/torch-cpu.txt").read_text()
     assert "torch==2.5.1" in torch_pins
     assert "torchvision==0.20.1" in torch_pins

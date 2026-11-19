@@ -10,7 +10,7 @@ The supported interpreter is CPython 3.11. Create the environment and install th
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip==24.3.1
-python -m pip install --only-binary=:all: --index-url https://download.pytorch.org/whl/cpu -r requirements/torch-cpu.txt
+python -m pip install --only-binary=:all: --index-url https://download.pytorch.org/whl/cpu -c requirements/constraints-py311.txt -r requirements/torch-cpu.txt
 python -m pip install --only-binary=:all: -r requirements/training.txt
 python -m pip install --only-binary=:all: --no-deps -r requirements/ultralytics.txt
 python -m ml_pipeline.training.train_from_manifest --help

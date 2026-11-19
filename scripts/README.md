@@ -40,3 +40,7 @@ A workstation should use a distinct ID (default `sip-fedora-eval`) rather than i
 | `evaluation_demo.py` | Run fixture-based local evaluation | Linux workstation |
 
 Specialist tools live under `pi/`, `tools/` and `ml_pipeline/tools/`.
+
+## Test runner
+
+Use `./scripts/test.sh setup` to re-run the isolated setup wizard and dependency-selection tests, or `./scripts/test.sh all` for the full suite. See [`../tests/README.md`](../tests/README.md) and [`../requirements/README.md`](../requirements/README.md) for the test matrix and dependency update policy.

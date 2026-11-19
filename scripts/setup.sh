@@ -209,9 +209,12 @@ fi
 
 # Pin pip and install the CPU-only PyTorch pair first. The official CPU index
 # contains CPython 3.11 wheels for Linux x86_64 and aarch64.
-"$PYTHON" -m pip install --upgrade "pip==24.3.1"
+"$PYTHON" -m pip install --upgrade --only-binary=:all: \
+  -c "$ROOT/requirements/constraints-py311.txt" \
+  -r "$ROOT/requirements/bootstrap.txt"
 "$PYTHON" -m pip install --only-binary=:all: \
   --index-url https://download.pytorch.org/whl/cpu \
+  -c "$ROOT/requirements/constraints-py311.txt" \
   -r "$ROOT/requirements/torch-cpu.txt"
 if [[ "$PROFILE" == pi ]]; then
   "$PYTHON" -m pip install --only-binary=:all: -r "$ROOT/requirements/runtime.txt"

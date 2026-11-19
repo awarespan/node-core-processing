@@ -83,8 +83,10 @@ The smoke test loads the actual weights and performs local inference; it require
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest -q
+./scripts/test.sh all
 ```
+
+Re-run just the setup/dependency-selection checks with `./scripts/test.sh setup`. See [`tests/README.md`](tests/README.md) for the test-suite layout.
 
 Software tests on a workstation do not verify Pi boot, CSI camera, GPIO, audio hardware, thermal/power behaviour or sustained ARM inference. Those checks require the physical Pi.
 
