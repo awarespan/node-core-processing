@@ -9,6 +9,7 @@ Contact: awarespan@bchbenjamin.in
 """
 
 import json
+import time
 import mimetypes
 import os
 from pathlib import Path
@@ -325,7 +326,12 @@ class VolunteerPortalAPI:
             "session_token": token,
             "token": token,
             "granted_capabilities": list(caps),
+            # The one-use pairing token expires quickly; the redeemed session is
+            # allowed to live longer. The UI tracks both lifetimes separately.
             "expires_in": int(self.session_mgr.pairing_timeout),
+            "pairing_expires_in": int(self.session_mgr.pairing_timeout),
+            "session_expires_in": int(self.session_mgr.session_timeout),
+            "expires_at": int((time.time() + self.session_mgr.session_timeout) * 1000),
             "node_id": self.settings.node_id,
         }
 

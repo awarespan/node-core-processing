@@ -22,6 +22,13 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import websockets
 
+try:
+    from websockets.http11 import Response
+    from websockets.datastructures import Headers
+except ImportError:  # websockets legacy API
+    Response = None
+    Headers = None
+
 from shared.config.settings import get_settings
 from shared.logging.logger import get_logger
 from node_runtime.media.registry.source_registry import MediaSourceRegistry, get_source_registry
@@ -74,18 +81,40 @@ class VolunteerGatewayServer:
         self._stop_event = asyncio.Event()
 
     async def _process_http_request(self, *args, **kwargs):
+        """Adapt HTTP route responses to the installed websockets API generation."""
+        result = await self._process_http_request_routes(*args, **kwargs)
+        if result is None:
+            return None
+        status, headers, body = result
+        is_modern_request = bool(args) and not isinstance(args[0], str)
+        if is_modern_request and Response is not None and Headers is not None:
+            status_code = int(status)
+            reason = http.HTTPStatus(status_code).phrase
+            return Response(status_code, reason, Headers(headers), body)
+        return result
+
+    async def _process_http_request_routes(self, *args, **kwargs):
         """
         Intercept HTTP requests before WebSocket upgrade.
-        Supports both websockets legacy (path, headers) and websockets 14+ (connection, request) signatures.
+        Route handler returns legacy triples internally; _process_http_request adapts
+        those to websockets.http11.Response for modern server APIs.
         """
         path = "/"
         client_ip = "127.0.0.1"
+        method = "GET"
+        request_headers = {}
 
         if len(args) == 2 and isinstance(args[0], str):
             path = args[0]
+            request_headers = args[1] if len(args) > 1 else {}
+            method = getattr(request_headers, "get", lambda *_: "GET")(
+                ":method", "GET"
+            )
         elif len(args) >= 2:
             conn, req = args[0], args[1]
             path = getattr(req, "path", "/")
+            method = getattr(req, "method", "GET").upper()
+            request_headers = getattr(req, "headers", {})
             if hasattr(conn, "remote_address") and conn.remote_address:
                 client_ip = conn.remote_address[0]
 
@@ -93,9 +122,48 @@ class VolunteerGatewayServer:
         route = parsed_url.path
         query = urllib.parse.parse_qs(parsed_url.query)
 
-        # Allow WebSocket upgrade for /ws/volunteer
+        cors_headers = [
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type, Authorization, X-TOTP-Code, X-Volunteer-Capability, X-Operator-ID"),
+            ("Access-Control-Max-Age", "600"),
+            ("Vary", "Origin"),
+            ("Connection", "close"),
+        ]
+
+        # Only allow WebSocket upgrades on the volunteer transport route.
         if route == "/ws/volunteer":
-            return None
+            return None if method == "GET" else (
+                http.HTTPStatus.METHOD_NOT_ALLOWED, cors_headers, b"Method Not Allowed"
+            )
+
+        # TOTP is sent in headers, never in a URL where reverse proxies commonly log it.
+        if route == "/api/volunteer/auth":
+            if method == "OPTIONS":
+                return (http.HTTPStatus.OK, cors_headers, b"")
+            if method != "POST":
+                payload = json.dumps({
+                    "ok": False,
+                    "success": False,
+                    "message": "Use POST with X-TOTP-Code; query-string authentication is disabled.",
+                }).encode("utf-8")
+                return (http.HTTPStatus.METHOD_NOT_ALLOWED,
+                        cors_headers + [("Content-Type", "application/json"), ("Content-Length", str(len(payload)))],
+                        payload)
+
+            totp_code = request_headers.get("X-TOTP-Code", "")
+            capability = request_headers.get("X-Volunteer-Capability", "both")
+            operator_id = request_headers.get("X-Operator-ID", "")
+            status_code, data = self.api.handle_auth_request(
+                {"totp_code": totp_code, "capability": capability, "operator_id": operator_id},
+                client_ip,
+            )
+            payload = json.dumps(data).encode("utf-8")
+            headers = cors_headers + [
+                ("Content-Type", "application/json"),
+                ("Content-Length", str(len(payload))),
+            ]
+            return (http.HTTPStatus(status_code), headers, payload)
 
         # 1. GET / -> Serve volunteer portal
         if route in ("/", "/index.html"):
@@ -145,38 +213,12 @@ class VolunteerGatewayServer:
             ]
             return (http.HTTPStatus(status_code), headers, payload)
 
-        # 5. /api/volunteer/auth
-        elif route == "/api/volunteer/auth":
-            totp_code = query.get("totp_code", [""])[0]
-            capability = query.get("capability", ["both"])[0]
-            if totp_code:
-                status_code, data = self.api.handle_auth_request(
-                    {"totp_code": totp_code, "capability": capability},
-                    client_ip,
-                )
-                payload = json.dumps(data).encode("utf-8")
-                headers = [
-                    ("Content-Type", "application/json"),
-                    ("Content-Length", str(len(payload))),
-                    ("Access-Control-Allow-Origin", "*"),
-                    ("Connection", "close"),
-                ]
-                return (http.HTTPStatus(status_code), headers, payload)
-            else:
-                headers = [
-                    ("Access-Control-Allow-Origin", "*"),
-                    ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
-                    ("Access-Control-Allow-Headers", "Content-Type, Authorization"),
-                    ("Connection", "close"),
-                ]
-                return (http.HTTPStatus.OK, headers, b'{"ok": true}')
-
         # 6. Handle CORS preflight
         elif route.startswith("/api/"):
             headers = [
                 ("Access-Control-Allow-Origin", "*"),
                 ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
-                ("Access-Control-Allow-Headers", "Content-Type, Authorization"),
+                ("Access-Control-Allow-Headers", "Content-Type, Authorization, X-TOTP-Code, X-Volunteer-Capability, X-Operator-ID"),
                 ("Connection", "close"),
             ]
             return (http.HTTPStatus.OK, headers, b"")
@@ -186,7 +228,9 @@ class VolunteerGatewayServer:
 
     async def _handle_websocket(self, websocket):
         """Handle active volunteer device WebSocket connection with signaling and binary transport."""
-        parsed_url = urllib.parse.urlparse(getattr(websocket, "path", "/"))
+        request = getattr(websocket, "request", None)
+        request_path = getattr(request, "path", None) or getattr(websocket, "path", "/")
+        parsed_url = urllib.parse.urlparse(request_path)
         query_params = urllib.parse.parse_qs(parsed_url.query)
         client_ip = websocket.remote_address[0] if websocket.remote_address else "127.0.0.1"
 
@@ -205,6 +249,8 @@ class VolunteerGatewayServer:
                     "type": "authorized",
                     "source_id": session.source_id,
                     "session_id": session.session_id,
+                    "granted_capabilities": sorted(session.granted_capabilities),
+                    "expires_at": int(session.expires_at * 1000),
                     "message": "Connected to AWARESPAN Edge Core",
                 }))
             else:
@@ -224,7 +270,28 @@ class VolunteerGatewayServer:
 
                     mtype = data.get("type", "")
 
-                    # 1. Direct WebSocket Authentication
+                    # 1. Redeem a single-use pairing token in the encrypted WebSocket
+                    # control channel. This avoids putting bearer credentials in URLs.
+                    if mtype == "pairing_token" and not session:
+                        pairing_token = str(data.get("token", "")).strip()
+                        ok, sess, msg = self.session_mgr.redeem_pairing_token(pairing_token, client_ip)
+                        if not ok or not sess:
+                            await websocket.send(json.dumps({"type": "error", "message": msg}))
+                            await websocket.close(1008, msg)
+                            return
+                        session = sess
+                        self._register_session_source(session, client_ip)
+                        await websocket.send(json.dumps({
+                            "type": "authorized",
+                            "source_id": session.source_id,
+                            "session_id": session.session_id,
+                            "granted_capabilities": sorted(session.granted_capabilities),
+                            "expires_at": int(session.expires_at * 1000),
+                            "message": "Pairing token redeemed",
+                        }))
+                        continue
+
+                    # 2. Direct WebSocket Authentication (legacy first-time portal flow).
                     if mtype == "auth" and not session:
                         totp_code = str(data.get("totp_code", "")).strip()
                         cap_str = str(data.get("capability", "both")).lower()

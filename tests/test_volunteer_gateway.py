@@ -8,9 +8,16 @@ Official problem statement: An AI-Powered Safety Device.
 Contact: awarespan@bchbenjamin.in
 """
 
+import asyncio
+import asyncio
+import json
 import time
-import pytest
+import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+import websockets
 
 from node_runtime.volunteer_gateway.auth.totp import TOTPAuthManager
 from node_runtime.volunteer_gateway.sessions.session_manager import (
@@ -24,7 +31,10 @@ from node_runtime.volunteer_gateway.transport.protocol import (
     parse_incoming_message,
 )
 from node_runtime.volunteer_gateway.api.portal import VolunteerPortalAPI
+from node_runtime.volunteer_gateway.gateway import VolunteerGatewayServer
 from node_runtime.media.registry.source_registry import MediaSourceRegistry
+from node_runtime.media.routing.media_router import CoreMediaRouter
+from node_runtime.volunteer_gateway.gateway import VolunteerGatewayServer
 
 
 def test_totp_auth_and_verification(tmp_path):
@@ -165,3 +175,146 @@ def test_portal_api(tmp_path):
     )
     assert status == 401
     assert resp["success"] is False
+
+
+def test_gateway_auth_uses_post_headers_and_never_query_string(tmp_path):
+    async def _run():
+        secret_file = tmp_path / "totp_secret.json"
+        auth_mgr = TOTPAuthManager(secret_file=secret_file)
+        session_mgr = VolunteerSessionManager(pairing_timeout_sec=300, session_timeout_sec=3600)
+        registry = MediaSourceRegistry()
+        gateway = object.__new__(VolunteerGatewayServer)
+        gateway.api = VolunteerPortalAPI(auth_mgr, session_mgr, registry)
+
+        code, _ = auth_mgr.get_current_token()
+        connection = SimpleNamespace(remote_address=("198.51.100.20", 54000))
+        request = SimpleNamespace(
+            path="/api/volunteer/auth",
+            method="POST",
+            headers={
+                "X-TOTP-Code": code,
+                "X-Volunteer-Capability": "camera",
+                "X-Operator-ID": "operator-test",
+                "Origin": "https://portal.example.test",
+            },
+        )
+        status, headers, body = await gateway._process_http_request_routes(connection, request)
+        response = json.loads(body)
+
+        assert int(status) == 200
+        assert response["success"] is True
+        assert response["granted_capabilities"] == ["camera"]
+        assert response["pairing_expires_in"] == 300
+        assert response["session_expires_in"] == 3600
+        assert response["pairing_token"]
+        assert any(k.lower() == "access-control-allow-origin" and v == "*" for k, v in headers)
+    asyncio.run(_run())
+
+def test_gateway_auth_preflight_and_get_query_are_safe(tmp_path):
+    async def _run():
+        auth_mgr = TOTPAuthManager(secret_file=tmp_path / "totp_secret.json")
+        gateway = object.__new__(VolunteerGatewayServer)
+        gateway.api = VolunteerPortalAPI(auth_mgr, VolunteerSessionManager(), MediaSourceRegistry())
+        connection = SimpleNamespace(remote_address=("198.51.100.21", 54000))
+
+        preflight = SimpleNamespace(path="/api/volunteer/auth", method="OPTIONS", headers={})
+        status, headers, body = await gateway._process_http_request_routes(connection, preflight)
+        assert int(status) == 200
+        assert body == b""
+        allow_headers = next(v for k, v in headers if k.lower() == "access-control-allow-headers")
+        assert "X-TOTP-Code" in allow_headers
+
+        legacy_get = SimpleNamespace(
+            path="/api/volunteer/auth?totp_code=123456",
+            method="GET",
+            headers={},
+        )
+        status, headers, body = await gateway._process_http_request_routes(connection, legacy_get)
+        assert int(status) == 405
+        assert b"query-string authentication is disabled" in body
+    asyncio.run(_run())
+
+def test_live_gateway_http_pairing_websocket_and_binary_frame_pipeline(tmp_path):
+    async def _run():
+        """Exercise the listening HTTP + WebSocket server, not a mocked route helper."""
+        from node_runtime.volunteer_gateway.transport.protocol import pack_binary_packet
+
+        secret_file = tmp_path / "totp_secret.json"
+        auth_mgr = TOTPAuthManager(secret_file=secret_file)
+        registry = MediaSourceRegistry()
+        router = CoreMediaRouter(registry=registry)
+        session_mgr = VolunteerSessionManager(
+            max_sessions=2, max_cameras=2, max_microphones=1,
+            pairing_timeout_sec=30, session_timeout_sec=120,
+        )
+        gateway = object.__new__(VolunteerGatewayServer)
+        gateway.host = "127.0.0.1"
+        gateway.port = 0
+        gateway.registry = registry
+        gateway.router = router
+        gateway.use_tls = False
+        gateway.auth_mgr = auth_mgr
+        gateway.session_mgr = session_mgr
+        gateway.api = VolunteerPortalAPI(auth_mgr, session_mgr, registry)
+        gateway._server = None
+        gateway._stop_event = asyncio.Event()
+
+        await gateway.start()
+        try:
+            port = gateway._server.sockets[0].getsockname()[1]
+            code, _ = auth_mgr.get_current_token()
+            auth_url = f"http://127.0.0.1:{port}/api/volunteer/auth"
+
+            def request_pairing_token():
+                request = urllib.request.Request(
+                    auth_url, data=b"", method="POST",
+                    headers={
+                        "X-TOTP-Code": code,
+                        "X-Operator-ID": "operator-test",
+                        "X-Volunteer-Capability": "camera",
+                        "Origin": "https://portal.example.test",
+                    },
+                )
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    return response.status, response.headers, json.loads(response.read())
+
+            status, headers, auth_data = await asyncio.to_thread(request_pairing_token)
+            assert status == 200
+            assert auth_data["success"] is True
+            assert auth_data["granted_capabilities"] == ["camera"]
+            assert auth_data["pairing_token"]
+            assert headers.get("Access-Control-Allow-Origin") == "*"
+
+            ws_url = f"ws://127.0.0.1:{port}/ws/volunteer"
+            async with websockets.connect(ws_url) as websocket:
+                await websocket.send(json.dumps({"type": "pairing_token", "token": auth_data["pairing_token"]}))
+                authorised = json.loads(await asyncio.wait_for(websocket.recv(), timeout=5))
+                assert authorised["type"] == "authorized"
+                assert authorised["granted_capabilities"] == ["camera"]
+                source_id = authorised["source_id"]
+
+                jpeg_payload = b"\xff\xd8\xffAWARESPAN_TEST_FRAME\xff\xd9"
+                packet = pack_binary_packet(
+                    PacketType.FRAME_JPEG, source_id="portal", seq_id=7,
+                    timestamp_ms=int(time.time() * 1000), payload=jpeg_payload,
+                )
+                await websocket.send(packet)
+                for _ in range(30):
+                    source = registry.get_source(source_id)
+                    if source and source.metrics["frames_received"] >= 1:
+                        break
+                    await asyncio.sleep(0.02)
+                assert source is not None
+                assert source.camera_active is True
+                assert source.metrics["frames_received"] == 1
+                assert source.metrics["last_frame_id"] == 7
+
+            # Pairing tokens are single-use; a second redemption must be rejected.
+            async with websockets.connect(ws_url) as second_socket:
+                await second_socket.send(json.dumps({"type": "pairing_token", "token": auth_data["pairing_token"]}))
+                rejected = json.loads(await asyncio.wait_for(second_socket.recv(), timeout=5))
+                assert rejected["type"] == "error"
+                assert "already been redeemed" in rejected["message"]
+        finally:
+            await gateway.stop()
+    asyncio.run(_run())
