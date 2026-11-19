@@ -57,7 +57,7 @@ def _run_setup(tmp_path, *options, api_key=None, profile="linux", python_minor="
         "AWARESPAN_TEST_INSTALL_LOG": str(log),
         "AWARESPAN_TEST_PY_MINOR": python_minor,
     })
-    for key in ("BACKEND_API_KEY", "BOT_TOKEN", "PRIMARY_CHAT_ID", "ALLOWED_CHAT_IDS"):
+    for key in ("BACKEND_API_KEY", "PI_DEVICE_SECRET", "PI_NODE_ID", "BOT_TOKEN", "PRIMARY_CHAT_ID", "ALLOWED_CHAT_IDS"):
         env.pop(key, None)
     if api_key:
         env["BACKEND_API_KEY"] = api_key
