@@ -21,3 +21,7 @@
 - [Threat testing](THREAT_TESTING_GUIDE.md)
 
 Historical project notes are retained under `archive/context/` and are not authoritative deployment instructions.
+
+## Temporary volunteer portal (LAN demo)
+
+The portal source is maintained in `web/volunteer-portal/` and its production build is served by the Node volunteer gateway from `static/volunteer/`. See [Volunteer Portal LAN Demo](VOLUNTEER_PORTAL_LAN_DEMO.md) for installation, HTTPS trust, and same-Wi-Fi access.

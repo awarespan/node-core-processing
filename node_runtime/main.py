@@ -14,6 +14,7 @@ import base64
 import json
 import os
 import signal
+import ssl
 import sys
 import time
 from pathlib import Path
@@ -599,15 +600,32 @@ async def run_server(args: argparse.Namespace) -> None:
     host = args.host or settings.runtime_host
     port = args.port or settings.runtime_port
 
+    # When the LAN portal is HTTPS, the runtime dashboard/health socket must
+    # use the same trusted certificate; browsers block ws:// from HTTPS pages.
+    runtime_ssl = None
+    if settings.volunteer_gateway_tls:
+        cert_dir = Path("state") / "certs"
+        cert_file = cert_dir / "volunteer_gateway.crt"
+        key_file = cert_dir / "volunteer_gateway.key"
+        if cert_file.is_file() and key_file.is_file():
+            runtime_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            runtime_ssl.load_cert_chain(certfile=str(cert_file), keyfile=str(key_file))
+        else:
+            raise RuntimeError(
+                "VOLUNTEER_GATEWAY_TLS is enabled but LAN certificates are missing. "
+                "Run scripts/setup-lan-https.sh <Pi-LAN-IP> first."
+            )
+
     async with websockets.serve(
         core.route_connection,
         host,
         port,
+        ssl=runtime_ssl,
         max_size=2**24,
         ping_interval=20,
         ping_timeout=20,
     ):
-        log.info("AWARESPAN Node Runtime active on ws://%s:%d (ingest: /ingest, dashboard: /)", host, port)
+        log.info("AWARESPAN Node Runtime active on %s://%s:%d (ingest: /ingest, dashboard: /)", "wss" if runtime_ssl else "ws", host, port)
         try:
             await core.processor_loop()
         finally:

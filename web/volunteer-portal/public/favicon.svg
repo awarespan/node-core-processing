@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Shield body -->
+  <path d="M16 2 L28 7 L28 16 C28 22 22 28 16 30 C10 28 4 22 4 16 L4 7 Z"
+        fill="#000000" stroke="#da5c2c" stroke-width="1.5"/>
+  <!-- Alert / eye icon inside shield -->
+  <circle cx="16" cy="15" r="7" fill="#da5c2c"/>
+  <circle cx="16" cy="15" r="3.5" fill="#000000"/>
+  <circle cx="16" cy="15" r="1.5" fill="#da5c2c"/>
+  <!-- Top triangle accent (shield top) -->
+  <path d="M16 4 L25 8.5 L25 16 C25 20 21 25.5 16 27.2" fill="#da5c2c" opacity="0.3"/>
+</svg>
