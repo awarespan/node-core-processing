@@ -87,18 +87,18 @@ describe('AWARESPAN Volunteer Portal — UI Components Suite', () => {
     expect(screen.getByText('NODE STATUS')).toBeInTheDocument();
   });
 
-  it('renders the Pi-owned audio hardware status without browser playback controls', () => {
+  it('renders the node-owned audio hardware status without browser playback controls', () => {
     render(
       <VolunteerProvider>
         <PiSpeakerStatusPanel />
       </VolunteerProvider>
     );
-    expect(screen.getByText('PI AUDIO HARDWARE OWNERSHIP')).toBeInTheDocument();
-    expect(screen.getByText(/Waiting for the Pi to report audio capabilities/i)).toBeInTheDocument();
+    expect(screen.getByText('NODE AUDIO HARDWARE OWNERSHIP')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for the node to report audio capabilities/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /play deterrence tone/i })).not.toBeInTheDocument();
   });
 
-  it('renders the Pi detection evidence area before the first detection', () => {
+  it('renders the node detection evidence area before the first detection', () => {
     render(
       <VolunteerProvider>
         <DetectionEvidence />
