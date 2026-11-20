@@ -9,11 +9,8 @@ interface NodeInfo {
 }
 
 export const TestMediaSubmission: React.FC = () => {
-  const [nodes, setNodes] = useState<NodeInfo[]>([
-    { id: 'sip-node-001', name: 'AWARESPAN Linux Node (sip-node-001)', status: 'ONLINE', batteryLevel: 98 },
-    { id: 'node-edge-02', name: 'AWARESPAN Edge Node (node-edge-02)', status: 'ONLINE', batteryLevel: 85 },
-  ]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>('sip-node-001');
+  const [nodes, setNodes] = useState<NodeInfo[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
   const [mediaType, setMediaType] = useState<'IMAGE' | 'VIDEO' | 'AUDIO'>('IMAGE');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -28,24 +25,26 @@ export const TestMediaSubmission: React.FC = () => {
   const backendBaseUrl = 'https://api.awarespan.bchbenjamin.in';
 
   useEffect(() => {
-    // Fetch registered nodes dynamically from central backend
-    fetch(`${backendBaseUrl}/api/v1/nodes`)
-      .then(res => {
-        if (res.ok) return res.json();
-        return null;
+    // This portal is hosted by the active node. Resolve its backend-assigned
+    // identity locally; never fall back to fabricated node IDs.
+    fetch(`${window.location.origin}/api/volunteer/config`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Local node config returned HTTP ${res.status}`);
+        return res.json();
       })
-      .then(data => {
-        if (data && Array.isArray(data)) {
-          setNodes(data.map((n: any) => ({
-            id: n.id,
-            name: n.name || n.id,
-            status: n.status || 'ONLINE',
-            batteryLevel: n.batteryLevel,
-          })));
-        }
+      .then((data) => {
+        const nodeId = typeof data.node_id === 'string' ? data.node_id.trim() : '';
+        if (!nodeId) throw new Error('The local node has not completed backend enrollment.');
+        setNodes([{ id: nodeId, name: `Local AWARESPAN node (${nodeId})`, status: 'ONLINE' }]);
+        setSelectedNodeId(nodeId);
+        setStatusMessage('Connected to the active local node identity.');
       })
-      .catch(() => {
-        // Fall back to default detected node list
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        setNodes([]);
+        setSelectedNodeId('');
+        setUploadStatus('FAILED');
+        setStatusMessage(`Cannot identify the active node: ${message}`);
       });
   }, []);
 
@@ -67,69 +66,86 @@ export const TestMediaSubmission: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !selectedNodeId) {
+      setUploadStatus('FAILED');
+      setStatusMessage('No enrolled local node is available.');
+      return;
+    }
 
     setUploadStatus('UPLOADING');
-    setProgress(15);
-    setStatusMessage(`Uploading ${mediaType.toLowerCase()} to Central Backend...`);
+    setProgress(10);
+    setResult(null);
+    setStatusMessage(`Uploading ${mediaType.toLowerCase()} to the AWARESPAN backend...`);
+    console.info('[AWARESPAN upload] Starting upload', {
+      nodeId: selectedNodeId,
+      mediaType,
+      filename: selectedFile.name,
+      sizeBytes: selectedFile.size,
+    });
 
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('nodeId', selectedNodeId);
       formData.append('mediaType', mediaType);
-
-      setProgress(40);
+      setProgress(35);
 
       const response = await fetch(`${backendBaseUrl}/api/v1/media/upload`, {
         method: 'POST',
         body: formData,
       });
-
       if (!response.ok) {
-        throw new Error(`Upload failed with HTTP ${response.status}`);
+        const detail = (await response.text()).slice(0, 240);
+        throw new Error(`Upload rejected (HTTP ${response.status}): ${detail || response.statusText}`);
       }
 
       const data = await response.json();
-      setProgress(75);
-      setUploadStatus('DISPATCHED');
-      setStatusMessage(`Media routed to AWARESPAN node [${selectedNodeId}]. Inference active...`);
+      const currentMediaId = String(data.mediaId || '');
+      if (!currentMediaId) throw new Error('Backend accepted the request without returning a media ID.');
+      console.info('[AWARESPAN upload] Backend accepted media', {
+        mediaId: currentMediaId,
+        nodeId: selectedNodeId,
+        sizeBytes: data.sizeBytes,
+        commandId: data.commandId,
+      });
+      setProgress(55);
+      setUploadStatus('PROCESSING');
+      setStatusMessage(`Backend accepted ${currentMediaId}. Waiting for node inference...`);
 
-      // Poll for processing outcome
-      const currentMediaId = data.mediaId;
-      let attempts = 0;
-      const pollTimer = setInterval(async () => {
-        attempts++;
-        try {
-          const pollRes = await fetch(`${backendBaseUrl}/api/v1/media/${currentMediaId}/result`);
-          if (pollRes.ok) {
-            const resData = await pollRes.json();
-            if (resData.status === 'INCIDENT_GENERATED' || resData.status === 'PROCESSED') {
-              clearInterval(pollTimer);
-              setProgress(100);
-              setUploadStatus('COMPLETED');
-              setResult(resData);
-              setStatusMessage(
-                resData.incidentId
-                  ? `Genuine incident [${resData.incidentId}] detected by node YOLOv8 pipeline!`
-                  : `Media processed: ${resData.message || 'Completed'}`
-              );
-              return;
-            }
-          }
-        } catch (_) {}
-
-        if (attempts >= 15) {
-          clearInterval(pollTimer);
+      for (let attempt = 0; attempt < 15; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        const pollRes = await fetch(`${backendBaseUrl}/api/v1/media/${encodeURIComponent(currentMediaId)}/result`);
+        if (!pollRes.ok) {
+          throw new Error(`Could not read processing result (HTTP ${pollRes.status}).`);
+        }
+        const resData = await pollRes.json();
+        if (resData.status === 'INCIDENT_GENERATED' || resData.status === 'PROCESSED') {
           setProgress(100);
           setUploadStatus('COMPLETED');
-          setStatusMessage(`Media routed and consumed by edge node [${selectedNodeId}].`);
+          setResult(resData);
+          setStatusMessage(
+            resData.incidentId
+              ? `Inference completed. Incident ${resData.incidentId} was generated.`
+              : resData.message || 'Inference completed; no qualifying threat was detected.'
+          );
+          console.info('[AWARESPAN upload] Node reported processing result', resData);
+          return;
         }
-      }, 1500);
+        if (resData.status === 'FAILED' || resData.status === 'ERROR') {
+          throw new Error(resData.message || 'The node reported a media processing failure.');
+        }
+        setProgress(Math.min(90, 55 + Math.round(((attempt + 1) / 15) * 35)));
+      }
 
-    } catch (err: any) {
       setUploadStatus('FAILED');
-      setStatusMessage(`Submission failed: ${err.message || String(err)}`);
+      setProgress(100);
+      setStatusMessage(`Backend accepted ${currentMediaId}, but the node did not report an inference result within 22.5 seconds. Check the node command-polling and runtime logs; this upload is NOT marked completed.`);
+      console.error('[AWARESPAN upload] Processing acknowledgement timed out', { mediaId: currentMediaId, nodeId: selectedNodeId });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setUploadStatus('FAILED');
+      setStatusMessage(`Submission failed: ${message}`);
+      console.error('[AWARESPAN upload] Submission failed', err);
     }
   };
 
@@ -159,9 +175,10 @@ export const TestMediaSubmission: React.FC = () => {
             onChange={(e) => setSelectedNodeId(e.target.value)}
             className="w-full bg-[#000000] border border-[#3c3c3c] text-[#f5f5f5] text-xs font-mono px-3 py-2.5 rounded-none focus:outline-none focus:border-[#ff4f2b] transition-colors"
           >
+            {nodes.length === 0 && <option value="">Resolving enrolled local node...</option>}
             {nodes.map(n => (
               <option key={n.id} value={n.id}>
-                {n.name} [{n.status}] {n.batteryLevel ? `• Battery: ${n.batteryLevel}%` : ''}
+                {n.name} [{n.status}]
               </option>
             ))}
           </select>
@@ -261,7 +278,7 @@ export const TestMediaSubmission: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <button
           type="button"
-          disabled={!selectedFile || uploadStatus === 'UPLOADING'}
+          disabled={!selectedFile || !selectedNodeId || uploadStatus === 'UPLOADING' || uploadStatus === 'PROCESSING'}
           onClick={handleSubmit}
           className="w-full sm:w-auto px-6 py-2.5 bg-[#ff4f2b] hover:bg-[#e03d1b] text-black font-mono text-xs font-semibold uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
         >
@@ -298,7 +315,7 @@ export const TestMediaSubmission: React.FC = () => {
         <div className="mt-4 border border-[#ff4f2b] bg-[#1a0a05] p-3 text-xs font-mono space-y-1">
           <div className="text-[#ff4f2b] font-semibold flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
-            <span>REAL THREAT INCIDENT GENERATED BY RASPBERRY PI</span>
+            <span>THREAT INCIDENT GENERATED BY AWARESPAN EDGE NODE</span>
           </div>
           <div className="text-[#f5f5f5]">
             Incident ID: <code className="bg-[#000000] px-1 py-0.5 border border-[#3c3c3c] text-[#ff4f2b]">{result.incidentId}</code>
@@ -307,7 +324,7 @@ export const TestMediaSubmission: React.FC = () => {
             Threat Type: <b>{result.tier?.toUpperCase()} ({result.labels?.join(', ')})</b> • Confidence: <b>{(result.confidence * 100).toFixed(1)}%</b>
           </div>
           <div className="text-emerald-400 text-[11px] pt-1">
-            ✓ Dispatched to Central Backend • ✓ Broadcasted to Android App • ✓ Telegram Alert Sent
+            ✓ Incident persisted by backend • ✓ Broadcast to connected Android clients
           </div>
         </div>
       )}

@@ -147,6 +147,8 @@ class RuntimeCore:
         if cmd_type == "MEDIA_INGEST":
             media_id = payload.get("mediaId") or f"media-{int(time.time())}"
             media_type = str(payload.get("mediaType", "IMAGE")).upper()
+            log.info("Media ingest command received: media=%s type=%s filename=%s declared_bytes=%s",
+                     media_id, media_type, payload.get("filename", ""), payload.get("sizeBytes", "unknown"))
 
             # 1. Photo / Image Ingestion
             if media_type == "IMAGE":
@@ -165,6 +167,7 @@ class RuntimeCore:
                         log.error("Failed to download media image %s: %s", media_id, err)
 
                 if img_bytes:
+                    log.info("Media image bytes loaded: media=%s bytes=%d", media_id, len(img_bytes))
                     nparr = np.frombuffer(img_bytes, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is not None:
@@ -177,8 +180,19 @@ class RuntimeCore:
                             "frame_ndarray": frame,
                             "media_id": media_id,
                         })
+                        log.info("Media image queued for inference: media=%s source=upload-%s", media_id, media_id)
                     else:
                         log.error("Image decode failed for media %s", media_id)
+                        if self.event_queue and self.event_queue.backend:
+                            self.event_queue.backend.report_media_result(media_id, {
+                                "mediaId": media_id, "status": "FAILED", "message": "Node could not decode the uploaded image."
+                            })
+                else:
+                    log.error("Media image payload unavailable: media=%s; neither inline bytes nor backend download succeeded", media_id)
+                    if self.event_queue and self.event_queue.backend:
+                        self.event_queue.backend.report_media_result(media_id, {
+                            "mediaId": media_id, "status": "FAILED", "message": "Node could not retrieve uploaded image bytes from the backend."
+                        })
 
             # 2. Video Ingestion (sequential decoding with bounded backpressure)
             elif media_type == "VIDEO":
@@ -383,6 +397,22 @@ class RuntimeCore:
             self.frame_counter += 1
             self._update_fps()
 
+            media_job_id = packet.get("media_id")
+            media_result = None
+            if media_job_id:
+                media_result = {
+                    "mediaId": media_job_id,
+                    "status": "PROCESSED",
+                    "threat": assessment.tier.upper() if assessment.tier != "none" else "NONE",
+                    "labels": assessment.labels,
+                    "confidence": assessment.max_confidence,
+                    "message": (
+                        "Inference completed; no qualifying threat was detected."
+                        if assessment.tier == "none"
+                        else "Inference completed; no new incident was dispatched (the alert may be in cooldown)."
+                    ),
+                }
+
             if assessment.tier != "none" and self._cooldown_passed(now_ms):
                 actions = self.response_selector.select_response(assessment)
 
@@ -466,17 +496,24 @@ class RuntimeCore:
                     except Exception as err:
                         log.warning("Telegram alert delivery failed: %s", err)
 
-                # Report test media outcome if triggered from upload job
-                media_job_id = packet.get("media_id")
-                if media_job_id and self.event_queue and self.event_queue.backend:
-                    self.event_queue.backend.report_media_result(media_job_id, {
-                        "mediaId": media_job_id,
+                if media_result is not None:
+                    media_result.update({
                         "status": "INCIDENT_GENERATED",
                         "incidentId": event.event_id,
                         "tier": assessment.tier,
-                        "labels": assessment.labels,
-                        "confidence": assessment.max_confidence,
+                        "message": "Inference completed and a threat incident was generated.",
                     })
+
+            # Every uploaded image must reach a terminal result, including the
+            # no-threat case. Otherwise the portal polls forever and can only guess.
+            if media_result is not None and self.event_queue and self.event_queue.backend:
+                reported = self.event_queue.backend.report_media_result(media_job_id, media_result)
+                if reported:
+                    log.info("Reported media inference result: media=%s status=%s threat=%s",
+                             media_job_id, media_result["status"], media_result["threat"])
+                else:
+                    log.warning("Could not report media inference result: media=%s status=%s",
+                                media_job_id, media_result["status"])
 
             # Build and broadcast annotated frame
             try:
