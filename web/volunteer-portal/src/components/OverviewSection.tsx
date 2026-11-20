@@ -63,7 +63,7 @@ export const OverviewSection: React.FC = () => {
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-[#ff4f2b]" />
             <h2 className="text-xs font-mono uppercase tracking-wider text-[#bfbfbf]">
-              TARGET RASPBERRY PI EDGE NODE
+              TARGET LINUX EDGE NODE
             </h2>
           </div>
           <div className="text-lg font-mono font-medium text-[#f5f5f5] mt-1 flex items-center gap-3">

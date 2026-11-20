@@ -232,6 +232,7 @@ class BackendSync:
         self.node_id = self.settings.node_id
         self.device_secret = self.settings.device_secret
         self.ready = bool(self.node_id and self.device_secret)
+        self.last_sync_error = ""
 
         self.headers = {
             "Content-Type": "application/json",
@@ -363,15 +364,27 @@ class BackendSync:
     def send_incident_with_evidence(self, event: ThreatEvent, image_bytes: bytes,
                                     model: str = "", mime_type: str = "image/jpeg") -> bool:
         """Atomically submit an incident and its annotated image in one multipart request."""
-        if not self.api_url or not self.ready or not image_bytes:
+        if not self.api_url:
+            self.last_sync_error = "BACKEND_API_URL is not configured"
+            log.error("Cannot forward Telegram test incident %s: %s", event.event_id, self.last_sync_error)
+            return False
+        if not self.ready:
+            self.last_sync_error = "node identity/device credential is missing; enroll this node first"
+            log.error("Cannot forward Telegram test incident %s: %s", event.event_id, self.last_sync_error)
+            return False
+        if not image_bytes:
+            self.last_sync_error = "annotated image is empty"
+            log.error("Cannot forward Telegram test incident %s: %s", event.event_id, self.last_sync_error)
             return False
         if len(image_bytes) > 10 * 1024 * 1024:
+            self.last_sync_error = "annotated image exceeds the 10 MB backend limit"
             log.warning("Incident %s image exceeds 10 MB; refusing multipart submission", event.event_id)
             return False
         payload = self._build_incident_payload(event, model=model)
         headers = dict(self.headers)
         headers.pop("Content-Type", None)
         try:
+            self.last_sync_error = ""
             response = requests.post(
                 f"{self.api_url}/api/v1/incidents/with-evidence",
                 files={
@@ -384,10 +397,12 @@ class BackendSync:
             if response.status_code in (200, 201):
                 log.info("Incident %s and annotated evidence synced atomically", event.event_id)
                 return True
-            log.warning("Incident/evidence submission failed (HTTP %d): %s", response.status_code, response.text[:200])
+            self.last_sync_error = f"backend returned HTTP {response.status_code}: {response.text[:240]}"
+            log.error("Incident/evidence submission failed for %s: %s", event.event_id, self.last_sync_error)
             return False
         except Exception as exc:
-            log.warning("Incident/evidence submission failed for %s: %s", event.event_id, exc)
+            self.last_sync_error = f"request error: {type(exc).__name__}: {exc}"
+            log.error("Incident/evidence submission failed for %s: %s", event.event_id, self.last_sync_error)
             return False
 
     def upload_evidence(self, incident_id: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> bool:

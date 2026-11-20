@@ -214,10 +214,16 @@ export class PiConnectionClient {
               this.isConnected = true;
               this.isVolunteering = true;
               this.callbacks.onStatusChange('connected');
-              const granted: string[] = Array.isArray(data.granted_capabilities)
-                ? data.granted_capabilities : [];
-              if (granted.includes('camera')) this.callbacks.onSourceAcknowledged('camera');
-              if (granted.includes('microphone')) this.callbacks.onSourceAcknowledged('microphone');
+              // Pairing capabilities are permissions, not proof that each source
+              // is active. A node may grant both while the portal intentionally
+              // falls back to camera-only (for example, when node audio owns output).
+              // Acknowledge only the media tracks this browser actually opened.
+              if (this.activeMode === 'camera' || this.activeMode === 'both') {
+                this.callbacks.onSourceAcknowledged('camera');
+              }
+              if (this.activeMode === 'microphone' || this.activeMode === 'both') {
+                this.callbacks.onSourceAcknowledged('microphone');
+              }
               this.connectDashboardFeed();
               this.startHeartbeatMonitor();
               this.callbacks.onHeartbeat(Date.now());

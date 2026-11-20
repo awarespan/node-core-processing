@@ -283,7 +283,15 @@ class RuntimeCore:
                 if mtype == "frame":
                     if "source_id" not in data:
                         data["source_id"] = "ws-ingest"
+                    frame_id = int(data.get("frame_id", 0))
+                    jpeg_b64 = str(data.get("jpeg_b64", ""))
+                    source_id = str(data.get("source_id", "ws-ingest"))
+                    if not jpeg_b64:
+                        await websocket.send(json.dumps({"type": "frame_rejected", "frame_id": frame_id, "reason": "Missing JPEG payload."}))
+                        continue
+                    log.info("Received browser test image from %s (frame=%d, jpeg_base64_chars=%d)", source_id, frame_id, len(jpeg_b64))
                     self._enqueue_frame(data)
+                    await websocket.send(json.dumps({"type": "frame_received", "source_id": source_id, "frame_id": frame_id, "queued": True}))
                 elif mtype == "audio_chunk":
                     await websocket.send(json.dumps({"type": "source_rejected", "source": "microphone",
                                                      "reason": "Pi runtime audio ingestion is not enabled."}))

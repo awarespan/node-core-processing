@@ -19,7 +19,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ state, className = '' 
         };
       case 'CAMERA_CONNECTED':
         return {
-          label: 'CAMERA ACTIVE (PI ACK)',
+          label: 'CAMERA ACTIVE (NODE ACK)',
           bg: 'bg-emerald-950/60',
           text: 'text-emerald-400',
           border: 'border-emerald-600',
@@ -27,7 +27,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ state, className = '' 
         };
       case 'MICROPHONE_CONNECTED':
         return {
-          label: 'MIC ACTIVE (PI ACK)',
+          label: 'MIC ACTIVE (NODE ACK)',
           bg: 'bg-emerald-950/60',
           text: 'text-emerald-400',
           border: 'border-emerald-600',
@@ -35,7 +35,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ state, className = '' 
         };
       case 'CONNECTING':
         return {
-          label: 'CONNECTING TO PI...',
+          label: 'CONNECTING TO NODE...',
           bg: 'bg-amber-950/60',
           text: 'text-amber-400',
           border: 'border-amber-600',
@@ -43,7 +43,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ state, className = '' 
         };
       case 'AWAITING_PI_ACK':
         return {
-          label: 'AWAITING PI ACK',
+          label: 'AWAITING NODE ACK',
           bg: 'bg-amber-950/60',
           text: 'text-amber-400',
           border: 'border-amber-600',
@@ -83,7 +83,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ state, className = '' 
         };
       case 'BACKEND_UNAVAILABLE':
         return {
-          label: 'PI UNAVAILABLE',
+          label: 'NODE UNAVAILABLE',
           bg: 'bg-red-950/60',
           text: 'text-red-400',
           border: 'border-red-600',

@@ -195,7 +195,7 @@ class TelegramOperatorBot:
                 f"Tier: <b>{assessment.tier.upper()}</b>\n"
                 f"Detected Objects ({len(detections)}): <code>{', '.join([d.label for d in detections]) or 'None'}</code>\n"
                 f"Max Confidence: <code>{assessment.max_confidence:.2f}</code>\n"
-                f"Action: {'Emergency Alert' if assessment.tier == 'tier2' else ('Siren Deterrence' if assessment.tier == 'tier1' else 'Pass')}"
+                "Action: TEST ONLY — no deterrence or live alert was triggered."
             )
 
             # 4. Upload annotated photo
@@ -229,7 +229,8 @@ class TelegramOperatorBot:
                         event, annotated_bytes, model=f"telegram-test:{model_name}", mime_type="image/jpeg"):
                     self.send_message(chat_id, f"🧪 TEST incident <code>{event_id}</code> and annotated evidence were forwarded to Android.")
                 else:
-                    self.send_message(chat_id, "⚠️ TEST result was not forwarded to Android: backend sync failed or the node is not enrolled.")
+                    reason = sanitize_text(getattr(backend, "last_sync_error", "Backend rejected the submission; inspect node logs."))
+                    self.send_message(chat_id, f"⚠️ TEST result was not forwarded to Android. Backend sync error: <code>{reason}</code>")
             else:
                 self.send_message(chat_id, "No incident was forwarded to Android: no configured threat class crossed the confidence threshold.")
 

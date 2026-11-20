@@ -14,13 +14,13 @@ describe('AWARESPAN Volunteer Portal — UI Components Suite', () => {
     expect(screen.getByText('IDLE / DISCONNECTED')).toBeInTheDocument();
 
     rerender(<StatusBadge state="CONNECTING" />);
-    expect(screen.getByText('CONNECTING TO PI...')).toBeInTheDocument();
+    expect(screen.getByText('CONNECTING TO NODE...')).toBeInTheDocument();
 
     rerender(<StatusBadge state="CAMERA_CONNECTED" />);
-    expect(screen.getByText('CAMERA ACTIVE (PI ACK)')).toBeInTheDocument();
+    expect(screen.getByText('CAMERA ACTIVE (NODE ACK)')).toBeInTheDocument();
 
     rerender(<StatusBadge state="MICROPHONE_CONNECTED" />);
-    expect(screen.getByText('MIC ACTIVE (PI ACK)')).toBeInTheDocument();
+    expect(screen.getByText('MIC ACTIVE (NODE ACK)')).toBeInTheDocument();
 
     rerender(<StatusBadge state="BOTH_CONNECTED" />);
     expect(screen.getByText('BOTH SOURCES ACTIVE')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('AWARESPAN Volunteer Portal — UI Components Suite', () => {
       </VolunteerProvider>
     );
 
-    expect(screen.getByText('TARGET RASPBERRY PI EDGE NODE')).toBeInTheDocument();
+    expect(screen.getByText('TARGET LINUX EDGE NODE')).toBeInTheDocument();
     expect(screen.getByText('Probe Node Health')).toBeInTheDocument();
     expect(screen.getByText('NODE STATUS')).toBeInTheDocument();
   });
