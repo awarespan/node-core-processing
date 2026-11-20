@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -26,6 +27,8 @@ from shared.logging.logger import get_logger, sanitize_text
 from shared.utilities.system import get_git_commit, get_raspberry_pi_model, get_throttled_state
 from node_runtime.detection.visual.detector import VisualDetector
 from node_runtime.processing.threat_assessment import ThreatAssessor
+from node_runtime.communications.backend_sync import BackendSync
+from shared.models.events import ThreatEvent
 
 log = get_logger("node_runtime.telegram_bot")
 
@@ -46,6 +49,7 @@ class TelegramOperatorBot:
 
         self.detector: Optional[VisualDetector] = None
         self.assessor = ThreatAssessor()
+        self.backend_sync: Optional[BackendSync] = None
         self.last_text_time = 0.0
 
     def validate_configuration(self) -> bool:
@@ -68,6 +72,13 @@ class TelegramOperatorBot:
         if self.detector is None:
             self.detector = VisualDetector(imgsz=640, confidence=0.25)
         return self.detector
+
+    def _get_backend_sync(self) -> BackendSync:
+        """Reuse the node's backend identity, enrolling only if this installation has none."""
+        if self.backend_sync is None:
+            already_enrolled = bool(self.settings.node_id and self.settings.device_secret)
+            self.backend_sync = BackendSync(auto_enroll=not already_enrolled)
+        return self.backend_sync
 
     def send_message(self, chat_id: str, text: str) -> bool:
         """Send HTML text message."""
@@ -160,17 +171,26 @@ class TelegramOperatorBot:
             # 2. Decode and run inference
             img_np = np.frombuffer(img_data, dtype=np.uint8)
             frame = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+            if frame is None:
+                self.send_message(chat_id, "⚠️ The uploaded file could not be decoded as an image.")
+                return
 
             detector = self._get_detector()
             annotated_frame, detections = detector.infer(frame)
             assessment = self.assessor.evaluate(detections)
 
-            # Save annotated output
-            cv2.imwrite(str(out_path), annotated_frame)
+            # Encode once; the same annotated bytes go to Telegram and the backend.
+            ok, encoded = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ok:
+                self.send_message(chat_id, "⚠️ Could not encode the annotated image.")
+                return
+            annotated_bytes = encoded.tobytes()
+            out_path.write_bytes(annotated_bytes)
 
             # 3. Build caption
             tier_icon = "🚨" if assessment.tier == "tier2" else ("⚠️" if assessment.tier == "tier1" else "✅")
             caption = (
+                f"🧪 <b>TEST — Telegram image submission; not a live sensor event.</b>\n"
                 f"{tier_icon} <b>AWARESPAN Threat Assessment: {assessment.threat_level}</b>\n"
                 f"Tier: <b>{assessment.tier.upper()}</b>\n"
                 f"Detected Objects ({len(detections)}): <code>{', '.join([d.label for d in detections]) or 'None'}</code>\n"
@@ -180,12 +200,38 @@ class TelegramOperatorBot:
 
             # 4. Upload annotated photo
             with open(out_path, "rb") as f:
-                requests.post(
+                telegram_response = requests.post(
                     f"{self.api_url}/sendPhoto",
                     data={"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"},
                     files={"photo": f},
                     timeout=20,
                 )
+            if telegram_response.status_code != 200:
+                log.warning("Telegram annotated photo delivery returned HTTP %d", telegram_response.status_code)
+
+            # Only a classified threat creates an Android test incident. This never
+            # invokes deterrence and is explicitly marked as a Telegram test event.
+            if assessment.tier != "none":
+                event_id = f"telegram-test-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
+                model_name = Path(getattr(detector, "model_path", "telegram-photo-test")).name
+                event = ThreatEvent(
+                    event_id=event_id,
+                    ts_ms=int(time.time() * 1000),
+                    tier=assessment.tier,
+                    labels=list(assessment.labels),
+                    max_confidence=float(assessment.max_confidence),
+                    action="test",
+                    model=model_name,
+                    source_id="telegram_bot_test",
+                )
+                backend = self._get_backend_sync()
+                if backend.send_incident_with_evidence(
+                        event, annotated_bytes, model=f"telegram-test:{model_name}", mime_type="image/jpeg"):
+                    self.send_message(chat_id, f"🧪 TEST incident <code>{event_id}</code> and annotated evidence were forwarded to Android.")
+                else:
+                    self.send_message(chat_id, "⚠️ TEST result was not forwarded to Android: backend sync failed or the node is not enrolled.")
+            else:
+                self.send_message(chat_id, "No incident was forwarded to Android: no configured threat class crossed the confidence threshold.")
 
             # Cleanup
             try:

@@ -305,42 +305,32 @@ class BackendSync:
             self.settings.device_secret = ""
             return False
 
-    def send_incident(self, event: ThreatEvent, model: str = "", deterrence: Optional[Dict[str, Any]] = None) -> bool:
-        """Transmit incident to backend REST endpoint /api/v1/incidents."""
-        if not self.api_url or not self.ready:
-            log.debug("Backend unavailable or node not enrolled; skipping REST incident sync.")
-            return False
-        url = f"{self.api_url}/api/v1/incidents"
+    def _build_incident_payload(self, event: ThreatEvent, model: str = "",
+                                deterrence: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         labels = {str(label).lower() for label in event.labels}
         if labels & {"gun", "knife", "weapon", "pistol", "rifle"}:
-            threat_type = "WEAPON"
-            detection_domain = "WEAPON"
+            threat_type, detection_domain = "WEAPON", "WEAPON"
         elif labels & {"dog", "cat", "horse", "cow", "sheep", "animal"}:
-            threat_type = "ANIMAL"
-            detection_domain = "ANIMAL"
+            threat_type, detection_domain = "ANIMAL", "ANIMAL"
         elif labels & {"car", "motorcycle", "bus", "truck", "train", "vehicle"}:
-            threat_type = "VEHICLE"
-            detection_domain = None
+            threat_type, detection_domain = "VEHICLE", None
         elif "person" in labels:
-            threat_type = "SUSPICIOUS_BEHAVIOR"
-            detection_domain = "VIOLENCE"
+            threat_type, detection_domain = "SUSPICIOUS_BEHAVIOR", "VIOLENCE"
         else:
-            threat_type = "UNKNOWN"
-            detection_domain = "UNKNOWN"
+            threat_type, detection_domain = "UNKNOWN", "UNKNOWN"
         detection_time = datetime.fromtimestamp(event.ts_ms / 1000.0, timezone.utc).isoformat()
         threat_desc = (
             f"Detected {', '.join(event.labels)} ({event.max_confidence * 100:.1f}%)"
-            if event.labels
-            else "Threat detected"
+            if event.labels else "Threat detected"
         )
-        threat_severity = "HIGH" if event.tier in ("tier1", "tier2", "critical", "high") else "MEDIUM"
-
-        payload = {
+        if event.source_id == "telegram_bot_test":
+            threat_desc = "TEST — submitted through the Telegram bot; not a live sensor event. " + threat_desc
+        return {
             "incidentId": event.event_id,
             "idempotencyKey": event.event_id,
             "nodeId": self.node_id,
             "threatType": threat_type,
-            "threatSeverity": threat_severity,
+            "threatSeverity": "HIGH" if event.tier in ("tier1", "tier2", "critical", "high") else "MEDIUM",
             "threatDescription": threat_desc,
             "confidence": float(event.max_confidence),
             "detections": [{"label": str(label).lower(), "confidence": float(event.max_confidence)} for label in event.labels],
@@ -350,30 +340,79 @@ class BackendSync:
             "detectionDomain": detection_domain,
             "deterrence": deterrence or {},
         }
+
+    def send_incident(self, event: ThreatEvent, model: str = "", deterrence: Optional[Dict[str, Any]] = None) -> bool:
+        """Transmit incident metadata to backend REST endpoint /api/v1/incidents."""
+        if not self.api_url or not self.ready:
+            log.debug("Backend unavailable or node not enrolled; skipping REST incident sync.")
+            return False
+        payload = self._build_incident_payload(event, model=model, deterrence=deterrence)
         try:
-            res = requests.post(url, json=payload, headers=self.headers, timeout=5)
-            if res.status_code in (200, 201):
-                log.info("Incident %s synced via REST API (status %d)", event.event_id, res.status_code)
+            response = requests.post(
+                f"{self.api_url}/api/v1/incidents", json=payload, headers=self.headers, timeout=5
+            )
+            if response.status_code in (200, 201):
+                log.info("Incident %s synced via REST API (status %d)", event.event_id, response.status_code)
                 return True
-            if res.status_code == 500 and ("modelVersion" in payload or "confidence" in payload):
-                fallback_payload = {
-                    "incidentId": event.event_id,
-                    "idempotencyKey": event.event_id,
-                    "nodeId": self.node_id,
-                    "threatType": threat_type,
-                    "threatSeverity": threat_severity,
-                    "threatDescription": threat_desc,
-                    "detectionTime": detection_time,
-                    "deterrence": deterrence or {},
-                }
-                res2 = requests.post(url, json=fallback_payload, headers=self.headers, timeout=5)
-                if res2.status_code in (200, 201):
-                    log.info("Incident %s synced via fallback REST payload (status %d)", event.event_id, res2.status_code)
-                    return True
-            log.warning("REST incident sync failed (status %d): %s", res.status_code, res.text[:200])
+            log.warning("REST incident sync failed (status %d): %s", response.status_code, response.text[:200])
             return False
         except Exception as exc:
             log.debug("REST incident sync exception (offline): %s", exc)
+            return False
+
+    def send_incident_with_evidence(self, event: ThreatEvent, image_bytes: bytes,
+                                    model: str = "", mime_type: str = "image/jpeg") -> bool:
+        """Atomically submit an incident and its annotated image in one multipart request."""
+        if not self.api_url or not self.ready or not image_bytes:
+            return False
+        if len(image_bytes) > 10 * 1024 * 1024:
+            log.warning("Incident %s image exceeds 10 MB; refusing multipart submission", event.event_id)
+            return False
+        payload = self._build_incident_payload(event, model=model)
+        headers = dict(self.headers)
+        headers.pop("Content-Type", None)
+        try:
+            response = requests.post(
+                f"{self.api_url}/api/v1/incidents/with-evidence",
+                files={
+                    "payload": (None, json.dumps(payload), "application/json"),
+                    "file": ("annotated.jpg", image_bytes, mime_type),
+                },
+                headers=headers,
+                timeout=20,
+            )
+            if response.status_code in (200, 201):
+                log.info("Incident %s and annotated evidence synced atomically", event.event_id)
+                return True
+            log.warning("Incident/evidence submission failed (HTTP %d): %s", response.status_code, response.text[:200])
+            return False
+        except Exception as exc:
+            log.warning("Incident/evidence submission failed for %s: %s", event.event_id, exc)
+            return False
+
+    def upload_evidence(self, incident_id: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> bool:
+        """Upload annotated image evidence for an already-ingested incident."""
+        if not self.api_url or not self.ready or not incident_id or not image_bytes:
+            return False
+        if len(image_bytes) > 10 * 1024 * 1024:
+            log.warning("Evidence upload skipped for %s: image exceeds 10 MB", incident_id)
+            return False
+        headers = dict(self.headers)
+        headers.pop("Content-Type", None)  # requests must set the multipart boundary.
+        try:
+            response = requests.post(
+                f"{self.api_url}/api/v1/evidence/{incident_id}/image",
+                files={"file": ("annotated.jpg", image_bytes, mime_type)},
+                headers=headers,
+                timeout=15,
+            )
+            if response.status_code in (200, 201):
+                log.info("Uploaded annotated image evidence for incident %s", incident_id)
+                return True
+            log.warning("Evidence upload failed for incident %s (HTTP %d): %s", incident_id, response.status_code, response.text[:200])
+            return False
+        except Exception as exc:
+            log.warning("Evidence upload failed for incident %s: %s", incident_id, exc)
             return False
 
     def send_heartbeat(self, extra: Optional[Dict[str, Any]] = None) -> bool:

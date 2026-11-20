@@ -121,3 +121,82 @@ def test_backend_enrollment_owns_public_node_identity_and_persists_credentials(m
     assert "PI_DEVICE_SECRET='" + ("b" * 64) + "'" in env
     assert "MQTT_CLIENT_ID='node-server-issued-1234'" in env
     assert Path(settings.state_dir, "installation_id").is_file()
+
+
+def test_telegram_test_incident_is_explicitly_marked_and_never_claimed_as_live(monkeypatch):
+    sync = BackendSync(api_url="https://backend.invalid", api_key="test-key", auto_enroll=False)
+    sync.node_id = "node-ci-telegram"
+    sync.device_secret = "test-secret"
+    sync.ready = True
+    sync.headers.update({"X-Node-Id": sync.node_id, "X-Device-Secret": sync.device_secret})
+    post = Mock(return_value=Mock(status_code=201, text="{}"))
+    monkeypatch.setattr("node_runtime.communications.backend_sync.requests.post", post)
+    event = build_threat_event(
+        tier="tier2", labels=["gun"], confidence=0.91,
+        event_id="telegram-test-ci-01", source_id="telegram_bot_test")
+
+    assert sync.send_incident(event, model="telegram-test:yolo") is True
+    payload = post.call_args.kwargs["json"]
+    assert payload["threatDescription"].startswith(
+        "TEST — submitted through the Telegram bot; not a live sensor event.")
+
+
+def test_telegram_incident_and_annotated_image_use_single_multipart_request(monkeypatch):
+    import json
+    sync = BackendSync(api_url="https://backend.invalid", api_key="test-key", auto_enroll=False)
+    sync.node_id = "node-ci-telegram"
+    sync.device_secret = "test-secret"
+    sync.ready = True
+    sync.headers.update({"X-Node-Id": sync.node_id, "X-Device-Secret": sync.device_secret})
+    post = Mock(return_value=Mock(status_code=201, text="{}"))
+    monkeypatch.setattr("node_runtime.communications.backend_sync.requests.post", post)
+    event = build_threat_event(
+        tier="tier2", labels=["gun"], confidence=0.91,
+        event_id="telegram-test-ci-02", source_id="telegram_bot_test")
+
+    assert sync.send_incident_with_evidence(event, b"\xff\xd8\xffimage", model="telegram-test:yolo") is True
+    args = post.call_args
+    assert args.args[0] == "https://backend.invalid/api/v1/incidents/with-evidence"
+    assert "Content-Type" not in args.kwargs["headers"]
+    parts = args.kwargs["files"]
+    payload = json.loads(parts["payload"][1])
+    assert payload["incidentId"] == "telegram-test-ci-02"
+    assert payload["threatDescription"].startswith("TEST — submitted through the Telegram bot")
+    assert parts["file"][1] == b"\xff\xd8\xffimage"
+
+
+def test_telegram_bot_photo_forwards_only_test_incidents_with_annotated_evidence(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    import numpy as np
+    import cv2
+    from pi.telegram_bot.bot import TelegramOperatorBot
+    from shared.models.events import Detection
+
+    bot = TelegramOperatorBot.__new__(TelegramOperatorBot)
+    bot.bot_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_1234567890"
+    bot.api_url = "https://api.telegram.org/bot-test"
+    bot.cache_dir = tmp_path
+    bot.detector = SimpleNamespace(
+        model_path="/models/yolov8n_best_weapon.pt",
+        infer=lambda frame: (np.zeros((8, 8, 3), dtype=np.uint8), [Detection("gun", 0.91, (0, 0, 2, 2))]),
+    )
+    bot.assessor = SimpleNamespace(evaluate=lambda detections: SimpleNamespace(
+        tier="tier2", threat_level="CRITICAL", labels=["gun"], max_confidence=0.91))
+    bot.backend_sync = Mock(ready=True, send_incident_with_evidence=Mock(return_value=True))
+    messages = []
+    bot.send_message = lambda chat_id, text: messages.append(text) or True
+
+    get_file = Mock(); get_file.json.return_value = {"ok": True, "result": {"file_path": "photos/input.jpg"}}
+    download = Mock(content=b"input-jpeg")
+    monkeypatch.setattr("pi.telegram_bot.bot.requests.get", Mock(side_effect=[get_file, download]))
+    monkeypatch.setattr("pi.telegram_bot.bot.requests.post", Mock(return_value=Mock(status_code=200)))
+    monkeypatch.setattr("pi.telegram_bot.bot.cv2.imdecode", lambda data, flags: np.zeros((8, 8, 3), dtype=np.uint8))
+    monkeypatch.setattr("pi.telegram_bot.bot.cv2.imencode", lambda *args, **kwargs: (True, np.frombuffer(b"\xff\xd8\xffannotated", dtype=np.uint8)))
+
+    bot.handle_photo([{"file_id": "telegram-file", "file_size": 100}], "123456")
+
+    bot.backend_sync.send_incident_with_evidence.assert_called_once()
+    event = bot.backend_sync.send_incident_with_evidence.call_args.args[0]
+    assert event.source_id == "telegram_bot_test"
+    assert event.action == "test"
+    assert "forwarded to Android" in messages[-1]
