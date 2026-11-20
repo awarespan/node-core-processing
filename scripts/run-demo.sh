@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Run the AWARESPAN node + volunteer portal on any Linux host (laptop, Codespace, Pi).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON="${ROOT}/.venv/bin/python"
+if [[ ! -x "${PYTHON}" ]]; then
+  echo "Missing ${PYTHON}. Run ./scripts/setup.sh first." >&2
+  exit 2
+fi
+if [[ ! -f "${ROOT}/static/volunteer/index.html" ]]; then
+  echo "Volunteer portal build is missing. Build web/volunteer-portal and sync dist/ to static/volunteer/." >&2
+  exit 2
+fi
+export AWARESPAN_ENV_FILE="${AWARESPAN_ENV_FILE:-${ROOT}/.env}"
+if [[ ! -f "${AWARESPAN_ENV_FILE}" ]]; then
+  echo "Missing ${AWARESPAN_ENV_FILE}. Run ./scripts/setup.sh first." >&2
+  exit 2
+fi
+# Read non-secret settings without sourcing the .env (values may contain shell metacharacters).
+read_env() { sed -n "s/^$1=//p" "${AWARESPAN_ENV_FILE}" | tail -n 1 | tr -d '\r'; }
+RUNTIME_PORT="$(read_env RUNTIME_PORT)"; RUNTIME_PORT="${RUNTIME_PORT:-8766}"
+GATEWAY_PORT="$(read_env VOLUNTEER_GATEWAY_PORT)"; GATEWAY_PORT="${GATEWAY_PORT:-8443}"
+TLS="$(read_env VOLUNTEER_GATEWAY_TLS)"; TLS="${TLS:-false}"
+if [[ "${TLS,,}" == "true" ]]; then SCHEME="https"; WS_SCHEME="wss"; else SCHEME="http"; WS_SCHEME="ws"; fi
+mapfile -t LAN_IPS < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | sort -u || true)
+echo "AWARESPAN Linux node starting on ${HOSTNAME:-this device}"
+echo "  Local portal: ${SCHEME}://127.0.0.1:${GATEWAY_PORT}/"
+for ip in "${LAN_IPS[@]}"; do echo "  LAN portal:   ${SCHEME}://${ip}:${GATEWAY_PORT}/"; done
+if command -v avahi-publish-address >/dev/null 2>&1 && pgrep -x avahi-daemon >/dev/null 2>&1; then
+  avahi-publish-address -R awarespan.local "${LAN_IPS[0]:-127.0.0.1}" >/dev/null 2>&1 &
+  MDNS_PID=$!
+  echo "  mDNS portal:  ${SCHEME}://awarespan.local:${GATEWAY_PORT}/"
+else
+  MDNS_PID=""
+  echo "  mDNS:         unavailable (install/start Avahi to use awarespan.local)"
+fi
+echo "  Runtime WS:   ${WS_SCHEME}://<same-host>:${RUNTIME_PORT}/"
+echo "Press Ctrl-C to stop. Run only one node on this LAN at a time."
+cleanup() { if [[ -n "${MDNS_PID}" ]]; then kill "${MDNS_PID}" 2>/dev/null || true; fi; }
+trap cleanup EXIT INT TERM
+cd "${ROOT}"
+"${PYTHON}" -m node_runtime.main --host 0.0.0.0 --port "${RUNTIME_PORT}" --volunteer-host 0.0.0.0 --volunteer-port "${GATEWAY_PORT}" &
+NODE_PID=$!
+wait "${NODE_PID}"

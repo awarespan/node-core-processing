@@ -19,7 +19,7 @@ export const DetectionEvidence: React.FC = () => {
         <div className="p-8 text-center">
           <ImageOff className="w-8 h-8 mx-auto mb-3 text-[#3c3c3c]" />
           <p className="text-xs font-mono text-[#bfbfbf]">No detections received yet.</p>
-          <p className="text-[11px] text-[#737373] mt-1">When the Pi reports a threat, its annotated frame will appear here.</p>
+          <p className="text-[11px] text-[#737373] mt-1">When the node reports a threat, its annotated frame will appear here.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
@@ -29,7 +29,7 @@ export const DetectionEvidence: React.FC = () => {
               <article key={event.event_id} className="border border-[#3c3c3c] bg-[#000000] min-w-0">
                 {imageUrl ? (
                   <a href={imageUrl} target="_blank" rel="noreferrer" aria-label={`Open annotated evidence for ${event.event_id}`}>
-                    <img src={imageUrl} alt={`Pi-annotated detection: ${event.labels.join(', ')}`} className="w-full aspect-video object-contain bg-black" />
+                    <img src={imageUrl} alt={`Node-annotated detection: ${event.labels.join(', ')}`} className="w-full aspect-video object-contain bg-black" />
                   </a>
                 ) : (
                   <div className="aspect-video flex flex-col items-center justify-center gap-2 text-[#737373]">
@@ -65,7 +65,7 @@ export const DetectionEvidence: React.FC = () => {
         </div>
       )}
       <div className="px-4 py-2 border-t border-[#3c3c3c] bg-[#000000] text-[10px] font-mono text-[#737373]">
-        Evidence is the JPEG produced by the Pi inference pipeline, with its detection boxes already drawn by the model visualizer.
+        Evidence is the JPEG produced by the node inference pipeline, with its detection boxes already drawn by the model visualizer.
       </div>
     </section>
   );

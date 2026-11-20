@@ -39,5 +39,7 @@ openssl x509 -req -sha256 -days 825 \
 chmod 600 "${CERT_DIR}/volunteer_gateway.key"
 chmod 644 "${CERT_DIR}/volunteer_gateway.crt" "${CERT_DIR}/awarespan-lan-ca.crt"
 cp "${CERT_DIR}/awarespan-lan-ca.crt" "${STATIC_DIR}/awarespan-lan-ca.crt"
-echo "LAN HTTPS certificate ready for https://${LAN_IP}:8443"
+echo "LAN HTTPS certificate ready for:"
+echo "  https://${LAN_IP}:8443/"
+echo "  https://awarespan.local:8443/"
 echo "Install ${STATIC_DIR}/awarespan-lan-ca.crt as a CA certificate on each demo Android device."

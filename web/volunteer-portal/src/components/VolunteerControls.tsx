@@ -121,8 +121,8 @@ export const VolunteerControls: React.FC<VolunteerControlsProps> = ({ onOpenAuth
           <p className="mt-3 text-[11px] font-mono text-amber-300 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             <span>{piCapabilities?.speaker_output_available
-              ? 'Pi audio output is present. The browser microphone and audio source options are locked.'
-              : 'The Pi has not advertised an operational microphone ingestion path. Audio donation is locked.'}</span>
+              ? 'Node audio output is present. The browser microphone and audio source options are locked.'
+              : 'The node has not advertised an operational microphone ingestion path. Audio donation is locked.'}</span>
           </p>
         )}
 
@@ -130,7 +130,7 @@ export const VolunteerControls: React.FC<VolunteerControlsProps> = ({ onOpenAuth
           <p className="mt-2 text-[11px] font-mono text-[#bfbfbf] flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-[#ff4f2b] shrink-0" />
             <span>
-              Both source permissions are required. Microphone donation is permitted only after the Pi explicitly advertises an available input path and no Pi-owned output conflict exists.
+              Both source permissions are required. Microphone donation is permitted only after the node explicitly advertises an available input path and no node-owned output conflict exists.
             </span>
           </p>
         )}

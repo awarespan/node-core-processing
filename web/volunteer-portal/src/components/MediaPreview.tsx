@@ -114,7 +114,7 @@ export const MediaPreview: React.FC = () => {
             <div className="flex items-center gap-1">
               <Eye className="w-3.5 h-3.5 text-[#ff4f2b]" />
               <span className={telemetry.cameraActive ? 'text-emerald-400' : 'text-[#737373]'}>
-                {telemetry.cameraActive ? 'Transmitting to Pi' : 'Standby'}
+                {telemetry.cameraActive ? 'Transmitting to node' : 'Standby'}
               </span>
             </div>
           </div>

@@ -10,10 +10,10 @@ interface NodeInfo {
 
 export const TestMediaSubmission: React.FC = () => {
   const [nodes, setNodes] = useState<NodeInfo[]>([
-    { id: 'sip-pi-001', name: 'Raspberry Pi 5 (sip-pi-001)', status: 'ONLINE', batteryLevel: 98 },
-    { id: 'node-edge-02', name: 'Raspberry Pi (node-edge-02)', status: 'ONLINE', batteryLevel: 85 },
+    { id: 'sip-node-001', name: 'AWARESPAN Linux Node (sip-node-001)', status: 'ONLINE', batteryLevel: 98 },
+    { id: 'node-edge-02', name: 'AWARESPAN Edge Node (node-edge-02)', status: 'ONLINE', batteryLevel: 85 },
   ]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>('sip-pi-001');
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('sip-node-001');
   const [mediaType, setMediaType] = useState<'IMAGE' | 'VIDEO' | 'AUDIO'>('IMAGE');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -93,7 +93,7 @@ export const TestMediaSubmission: React.FC = () => {
       const data = await response.json();
       setProgress(75);
       setUploadStatus('DISPATCHED');
-      setStatusMessage(`Media routed to Raspberry Pi node [${selectedNodeId}]. Inference active...`);
+      setStatusMessage(`Media routed to AWARESPAN node [${selectedNodeId}]. Inference active...`);
 
       // Poll for processing outcome
       const currentMediaId = data.mediaId;
@@ -151,7 +151,7 @@ export const TestMediaSubmission: React.FC = () => {
       {/* Target Node Selection */}
       <div className="mb-4">
         <label className="block text-xs font-mono uppercase text-[#737373] mb-1.5">
-          Target Raspberry Pi Edge Node:
+          Target AWARESPAN Edge Node:
         </label>
         <div className="relative">
           <select
@@ -169,7 +169,7 @@ export const TestMediaSubmission: React.FC = () => {
       </div>
 
       {/* Media Type Tabs */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
         <button
           type="button"
           onClick={() => { setMediaType('IMAGE'); setSelectedFile(null); setPreviewUrl(null); }}

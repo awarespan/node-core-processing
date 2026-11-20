@@ -5,7 +5,7 @@
  * NOTE: As per AWARESPAN security requirements:
  * 1. Passwords, TOTP secrets, and long-lived tokens are NEVER persisted in localStorage.
  * 2. Session credentials are short-lived in-memory objects.
- * 3. In production mode, authentication is delegated to the Raspberry Pi backend.
+ * 3. In production mode, authentication is delegated to the AWARESPAN node backend.
  *    If the backend does not expose an authentication endpoint, the frontend reports
  *    the missing backend contract rather than faking security.
  */
@@ -116,7 +116,7 @@ export const authenticateOperator = async (
     } else {
       return {
         success: false,
-        errorMessage: `Raspberry Pi authentication failed with status ${response.status}: ${response.statusText}`,
+        errorMessage: `Node authentication failed with status ${response.status}: ${response.statusText}`,
       };
     }
   } catch (err: unknown) {

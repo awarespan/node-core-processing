@@ -35,7 +35,7 @@ export const SessionMonitor: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-5 gap-3">
         {/* Metric 1: Duration */}
         <div className="bg-[#000000] border border-[#3c3c3c] p-3">
           <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#737373] mb-1">

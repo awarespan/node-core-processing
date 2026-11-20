@@ -102,7 +102,7 @@ export const OverviewSection: React.FC = () => {
       )}
 
       {/* Grid of operational indicators */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+      <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4">
         <div className="bg-[#000000] border border-[#3c3c3c] p-3">
           <span className="text-[11px] font-mono uppercase text-[#737373] block mb-1">
             NODE STATUS

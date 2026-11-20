@@ -34,7 +34,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-[#000000] border border-[#3c3c3c] shadow-2xl relative">
+      <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-[#000000] border border-[#3c3c3c] shadow-2xl relative">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#3c3c3c] bg-[#1a1a1a]">
           <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSave} className="p-6 space-y-4">
+        <form onSubmit={handleSave} className="p-4 sm:p-6 space-y-4">
           {/* Mode Switch */}
           <div className="p-3.5 bg-[#1a1a1a] border border-[#3c3c3c] flex items-center justify-between">
             <div>
@@ -60,7 +60,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
                 Development / Mock Mode
               </span>
               <span className="text-[11px] font-mono text-[#737373]">
-                Simulates Pi handshake and ACKs without live physical hardware
+                Simulates node handshake and ACKs without live physical hardware
               </span>
             </div>
             <input
@@ -75,7 +75,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
             <div className="p-3 bg-amber-950/40 border border-amber-800 text-amber-300 text-xs font-mono flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <strong>Live Pi Mode:</strong> The frontend will connect directly to{' '}
+                <strong>Live Node Mode:</strong> The frontend will connect directly to{' '}
                 <code>{useSsl ? 'wss' : 'ws'}://{piHost}:{gatewayPort}/ws/volunteer</code> for authenticated media, plus runtime health/dashboard on port {piPort}. No responses are fabricated.
               </div>
             </div>
@@ -83,7 +83,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
 
           <div>
             <label className="block text-xs font-mono uppercase text-[#bfbfbf] mb-1">
-              Raspberry Pi Hostname or IP
+              Node Hostname or IP
             </label>
             <input
               type="text"
@@ -95,7 +95,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-mono uppercase text-[#bfbfbf] mb-1">
                 Core runtime port (health / dashboard)
@@ -153,7 +153,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
             <span className="text-[11px] font-mono text-[#737373] block mb-1">
               QUICK PRESETS:
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -176,7 +176,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
                 }}
                 className="px-2 py-1 text-[11px] font-mono bg-[#1a1a1a] hover:bg-[#252525] border border-[#3c3c3c] text-[#bfbfbf] cursor-pointer"
               >
-                Pi USB-C (10.42.0.1)
+                USB-C tether (10.42.0.1)
               </button>
               <button
                 type="button"

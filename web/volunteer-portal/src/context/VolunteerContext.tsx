@@ -1,6 +1,6 @@
 /**
  * AWARESPAN Volunteer Portal — Centralized State Machine & Context
- * Orchestrates connection lifecycle, permissions, media loop, and Pi communications.
+ * Orchestrates connection lifecycle, permissions, media loop, and node communications.
  */
 
 import React, {
@@ -147,7 +147,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTelemetry((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  // Match Pi threat events to the annotated frame emitted for the same frame_id.
+  // Match node threat events to the annotated frame emitted for the same frame_id.
   const handleDetectionEvent = useCallback((event: PiDetectionEvent) => {
     const eventKey = `${event.source_id || 'unknown'}:${event.frame_id}`;
     const previous = pendingDetectionsRef.current.get(eventKey);
@@ -160,7 +160,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       addLog('warn', 'media', `Detection ${event.event_id} arrived without its annotated frame.`);
     }, 2500);
     pendingDetectionsRef.current.set(eventKey, { event, timer });
-    addLog('success', 'ack', `Pi reported ${event.labels.join(', ') || 'a threat'}; waiting for annotated evidence.`);
+    addLog('success', 'ack', `Node reported ${event.labels.join(', ') || 'a threat'}; waiting for annotated evidence.`);
   }, [addLog]);
 
   const handleAnnotatedFrame = useCallback((frame: AnnotatedFramePayload) => {
@@ -188,7 +188,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       onStatusChange: (status) => {
         if (status === 'connecting') {
           setConnectionState('CONNECTING');
-          addLog('info', 'network', `Connecting to Raspberry Pi at ${config.piHost}:${config.piPort}...`);
+          addLog('info', 'network', `Connecting to AWARESPAN node at ${config.piHost}:${config.piPort}...`);
         } else if (status === 'connected') {
           setConnectionState('AWAITING_PI_ACK');
           addLog('info', 'network', 'WebSocket connection established. Awaiting source acknowledgement...');
@@ -204,11 +204,11 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
           updateTelemetry({ cameraActive: false, microphoneActive: false });
         } else if (status === 'rejected') {
           setConnectionState('BACKEND_UNAVAILABLE');
-          addLog('error', 'network', 'Raspberry Pi rejected volunteer session.');
+          addLog('error', 'network', 'AWARESPAN node rejected volunteer session.');
         }
       },
       onSourceAcknowledged: (source) => {
-        addLog('success', 'ack', `Raspberry Pi node acknowledged active source: [${source.toUpperCase()}]`);
+        addLog('success', 'ack', `AWARESPAN node acknowledged active source: [${source.toUpperCase()}]`);
 
         setConnectionState((curr) => {
           if (source === 'camera') {
@@ -230,7 +230,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
         addLog('error', 'network', error);
       },
       onClose: (reason) => {
-        addLog('info', 'network', `Pi connection closed: ${reason}`);
+        addLog('info', 'network', `Node connection closed: ${reason}`);
       },
       onAnnotatedFrame: handleAnnotatedFrame,
       onDetectionEvent: handleDetectionEvent,
@@ -241,7 +241,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       },
       onSourceRejected: (source, reason) => {
-        addLog('error', 'media', `Pi rejected ${source} input: ${reason}`);
+        addLog('error', 'media', `Node rejected ${source} input: ${reason}`);
         mediaManagerRef.current.stopCapture();
         setLocalStream(null);
         if (videoRef.current) videoRef.current.srcObject = null;
@@ -351,17 +351,17 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // 2. Confirm Pi capabilities BEFORE requesting any browser media permission.
+    // 2. Confirm node capabilities BEFORE requesting any browser media permission.
     let effectiveMode = volunteerMode;
     if (!config.mockMode) {
       if (!piClientRef.current) {
-        addLog('error', 'network', 'Pi client is unavailable; no media permission was requested.');
+        addLog('error', 'network', 'Node client is unavailable; no media permission was requested.');
         return;
       }
       const health = await piClientRef.current.checkHealth();
       if (!health.online) {
         setConnectionState('BACKEND_UNAVAILABLE');
-        addLog('error', 'network', `Pi capability check failed: ${health.error || 'node offline'}. No media permission was requested.`);
+        addLog('error', 'network', `Node capability check failed: ${health.error || 'node offline'}. No media permission was requested.`);
         return;
       }
       const capabilities = health.capabilities;
@@ -370,8 +370,8 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
         && capabilities?.speaker_output_available !== true;
       if ((effectiveMode === 'microphone' || effectiveMode === 'both') && !microphoneAllowed) {
         const reason = capabilities?.speaker_output_available
-          ? 'Pi audio output is owned by the Raspberry Pi.'
-          : 'The Pi has not advertised a working microphone ingestion path.';
+          ? 'Node audio output is owned by the active node.'
+          : 'The node has not advertised a working microphone ingestion path.';
         if (effectiveMode === 'both') {
           effectiveMode = 'camera';
           setVolunteerMode('camera');
@@ -430,7 +430,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       return;
     }
 
-    // 3. Initiate Pi Connection
+    // 3. Initiate node connection
     if (!piClientRef.current) return;
 
     framesSentCountRef.current = 0;
@@ -464,7 +464,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     // 5. Start Frame Capture Loop (if camera enabled)
     if (wantVideo) {
-      // 10 FPS = 100ms interval (balances responsiveness and Raspberry Pi inference load)
+      // 10 FPS = 100ms interval (balances responsiveness and edge-node inference load)
       const FPS_INTERVAL = 100;
       frameIntervalRef.current = window.setInterval(() => {
         if (!videoRef.current) return;
@@ -538,7 +538,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       videoRef.current.srcObject = null;
     }
 
-    // 3. Disconnect from Raspberry Pi
+    // 3. Disconnect from node
     if (piClientRef.current) {
       piClientRef.current.disconnect();
     }
@@ -557,7 +557,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => {
     if (piCapabilities?.speaker_output_available && telemetry.microphoneActive) {
-      addLog('warn', 'media', 'Pi audio output appeared while browser microphone was active. Stopping volunteer media and releasing browser devices.');
+      addLog('warn', 'media', 'Node audio output appeared while browser microphone was active. Stopping volunteer media and releasing browser devices.');
       stopVolunteering();
       setVolunteerMode('camera');
     }

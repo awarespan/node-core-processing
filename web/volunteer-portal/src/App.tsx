@@ -43,14 +43,14 @@ export const App: React.FC = () => {
               </h1>
               <p className="text-xs text-[#bfbfbf] max-w-2xl mt-2 leading-relaxed">
                 Allows authorized operator devices to volunteer camera input as an auxiliary observation feed
-                for an AWARESPAN Raspberry Pi edge node. Audio output remains Pi-owned; browser microphone
-                donation is disabled until a live Pi-side input pipeline is available.
+                for the active AWARESPAN Linux edge node. Audio output remains node-owned; browser microphone
+                donation is disabled until a live node-side input pipeline is available.
               </p>
             </div>
 
             <div className="shrink-0 flex items-center gap-2 text-xs text-[#737373]">
               <Info className="w-4 h-4 text-[#ff4f2b]" />
-              <span>Edge AI models execute strictly on the Raspberry Pi</span>
+              <span>Edge AI models execute on the active node</span>
             </div>
           </div>
         </section>
@@ -61,7 +61,7 @@ export const App: React.FC = () => {
         {/* 1.1 Test Media Submission Interface */}
         <TestMediaSubmission />
 
-        {/* 2. Pi-owned output capability and volunteer source guards */}
+        {/* 2. Node-owned output capability and volunteer source guards */}
         <PiSpeakerStatusPanel />
 
         {/* 3. Volunteer Device Controls */}
@@ -70,7 +70,7 @@ export const App: React.FC = () => {
         {/* 4. Media Preview (Camera & Mic Activity) */}
         <MediaPreview />
 
-        {/* 5. Annotated evidence returned by the Pi */}
+        {/* 5. Annotated evidence returned by the node */}
         <DetectionEvidence />
 
         {/* 6. Live Session Telemetry */}
@@ -89,7 +89,7 @@ export const App: React.FC = () => {
             <p>
               This portal does not perform AI threat detection, does not store media recordings in cloud storage,
               and contains no Telegram bot tokens. All operational threat decisions and Telegram notifications
-              originate authoritatively from the Raspberry Pi edge node.
+              originate authoritatively from the active edge node.
             </p>
           </div>
         </section>

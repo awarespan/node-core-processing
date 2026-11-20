@@ -26,7 +26,7 @@ export const TerminalLogs: React.FC = () => {
   return (
     <div className="border border-[#3c3c3c] bg-[#1a1a1a] mb-8">
       {/* Console Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] bg-[#000000]">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-stretch gap-2 px-3 sm:px-4 py-2.5 border-b border-[#3c3c3c] bg-[#000000]">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-[#ff4f2b]" />
           <span className="text-xs font-mono uppercase tracking-wider text-[#f5f5f5]">
@@ -37,14 +37,14 @@ export const TerminalLogs: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2">
           {/* Category Filter */}
           <div className="flex items-center gap-1 text-[11px] font-mono text-[#737373]">
             <Filter className="w-3 h-3 text-[#ff4f2b]" />
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as LogCategory | 'all')}
-              className="bg-[#1a1a1a] border border-[#3c3c3c] text-xs font-mono text-[#bfbfbf] px-2 py-0.5 outline-none cursor-pointer"
+              className="max-w-[220px] bg-[#1a1a1a] border border-[#3c3c3c] text-xs font-mono text-[#bfbfbf] px-2 py-0.5 outline-none cursor-pointer"
             >
               <option value="all">ALL CATEGORIES</option>
               <option value="auth">AUTH</option>

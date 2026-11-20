@@ -34,19 +34,23 @@ See [`scripts/README.md`](scripts/README.md) for all flags and [`docs/EVALUATION
 
 ## Run on a Linux workstation
 
-After setup, start the node in terminal 1 (replace the config path if you selected a custom `--env-file`):
+After setup, start the node and its volunteer portal on any supported Linux device:
 
 ```bash
-AWARESPAN_ENV_FILE="$PWD/.env" .venv/bin/python -m node_runtime.main --host 127.0.0.1 --port 8766
+./scripts/run-demo.sh
 ```
 
-In terminal 2, send webcam frames to it:
+The launcher binds both services to all network interfaces, prints the device's LAN addresses, and advertises `awarespan.local` with Avahi when available. Only run one AWARESPAN node on the LAN at a time so that this shared name has one owner. If mDNS is unavailable, use the printed LAN IP. The same launcher works on a laptop and on the Raspberry Pi; the Pi is not a requirement for software validation.
+
+For local-only testing, `http://127.0.0.1:8443/` is also available while the node is running. For phone camera access over Wi-Fi, use HTTPS: run `./scripts/setup-lan-https.sh <LAN-IP>`, install the generated local CA on the phone once, set `VOLUNTEER_GATEWAY_TLS=true` in `.env`, and restart the launcher. The certificate covers both the current LAN IP and `awarespan.local`.
+
+In a second terminal, send webcam frames from the same Linux device:
 
 ```bash
 .venv/bin/python laptop/stream_client.py --pi-host 127.0.0.1 --pi-port 8766 --camera 0 --fps 8
 ```
 
-For a phone or another LAN client, bind the runtime to `0.0.0.0`, allow the port through the host firewall, and use the workstation's LAN IP. Do not expose the runtime directly to the public internet.
+For another LAN device, replace `127.0.0.1` with `awarespan.local` (or the printed LAN IP). Allow TCP ports `8443` and `8766` through the host firewall. Do not expose the runtime directly to the public internet.
 
 A Linux workstation can connect to production REST APIs when explicitly configured. The backend assigns each installation its own public node ID and display name during enrollment; nodes cannot select either value. The global `DEVICE_API_KEY` is stored locally as `BACKEND_API_KEY` and used only for enrollment. The backend returns the node ID and per-node secret; subsequent REST calls use that credential. MQTT is a separate integration and requires broker configuration.
 

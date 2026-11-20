@@ -86,29 +86,29 @@ Response: { "status": "authorized", "session_token": "vol-tok-...", "expires_at"
               <div className="p-3 bg-[#000000] border border-[#3c3c3c]">
                 <h4 className="text-[#f5f5f5] font-bold mb-1">B. Microphone Ingestion — DISABLED</h4>
                 <p className="text-[#737373] mb-2">
-                  The Pi currently has no live volunteer-microphone ingestion pipeline. Production capability reports microphone input unavailable; the portal blocks browser microphone permissions and the Pi rejects audio chunks. The browser cannot own or substitute for Pi audio output.
+                  The node currently has no live volunteer-microphone ingestion pipeline. Production capability reports microphone input unavailable; the portal blocks browser microphone permissions and the node rejects audio chunks. The browser cannot own or substitute for node audio output.
                 </p>
                 <pre className="p-2 bg-[#1a1a1a] border border-[#3c3c3c] text-[#bfbfbf]">
-{`{ "type": "source_rejected", "source": "microphone", "reason": "Pi runtime audio ingestion is not enabled." }`}
+{`{ "type": "source_rejected", "source": "microphone", "reason": "Node runtime audio ingestion is not enabled." }`}
                 </pre>
               </div>
 
               <div className="p-3 bg-[#000000] border border-[#3c3c3c]">
                 <h4 className="text-[#f5f5f5] font-bold mb-1">C. Bidirectional Source Acknowledgement (ACK)</h4>
                 <p className="text-[#737373] mb-2">
-                  The frontend must not fake an active state. The Pi currently acknowledges camera input only; microphone input is explicitly rejected:
+                  The frontend must not fake an active state. The node currently acknowledges camera input only; microphone input is explicitly rejected:
                 </p>
                 <pre className="p-2 bg-[#1a1a1a] border border-[#3c3c3c] text-[#bfbfbf]">
 {`{ "type": "ack", "source": "camera" }
-{ "type": "source_rejected", "source": "microphone", "reason": "Pi runtime audio ingestion is not enabled." }
+{ "type": "source_rejected", "source": "microphone", "reason": "Node runtime audio ingestion is not enabled." }
 { "type": "heartbeat", "ts_ms": 1794424650000 }`}
                 </pre>
               </div>
 
               <div className="p-3 bg-[#000000] border border-[#3c3c3c]">
-                <h4 className="text-[#f5f5f5] font-bold mb-1">D. Raspberry Pi &rarr; Telegram Notifications</h4>
+                <h4 className="text-[#f5f5f5] font-bold mb-1">D. Edge Node &rarr; Telegram Notifications</h4>
                 <p className="text-[#737373] mb-2">
-                  In compliance with Section 10 of the design requirements, Telegram alerts originate strictly from the Pi node. Below is the Python patch for <code>node_runtime/main.py</code>:
+                  In compliance with Section 10 of the design requirements, Telegram alerts originate strictly from the active node. Below is the Python patch for <code>node_runtime/main.py</code>:
                 </p>
                 <pre className="p-2 bg-[#1a1a1a] border border-[#3c3c3c] text-emerald-300 overflow-x-auto">
 {`from node_runtime.monitoring.telegram_notify import send_message
@@ -137,7 +137,7 @@ async def _ingest_handler(self, websocket):
             </p>
             <ul className="list-disc list-inside space-y-1 text-[#bfbfbf] mt-2">
               <li>Direct live streaming to the verified <code>/ingest</code> endpoint using standard Canvas/JPEG encoding.</li>
-              <li>Dedicated Dev/Mock Mode with simulated latency, ACKs, and capacity limits for testing without Pi hardware.</li>
+              <li>Dedicated Dev/Mock Mode with simulated latency, ACKs, and capacity limits for testing without physical node hardware.</li>
               <li>Zero hardcoded backend tokens or Telegram secrets in the frontend repository.</li>
             </ul>
           </div>

@@ -46,41 +46,41 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuth, onOpenConfig, onOpen
             onClick={onOpenConfig}
             className="text-[#ff4f2b] underline hover:text-[#f5f5f5] ml-2 cursor-pointer"
           >
-            Switch to Live Pi Target
+            Switch to Live Node Target
           </button>
         </div>
       )}
 
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-[1280px] mx-auto px-3 sm:px-6 min-h-16 py-2 flex flex-wrap items-center justify-between gap-y-2">
         {/* Brand Wordmark */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="w-7 h-7 bg-[#ff4f2b] flex items-center justify-center text-black font-mono font-bold text-sm tracking-tighter">
             AS
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-base font-semibold tracking-wider text-[#f5f5f5]">
+              <span className="font-mono text-sm sm:text-base font-semibold tracking-wider text-[#f5f5f5]">
                 AWARESPAN
               </span>
-              <span className="text-[10px] font-mono uppercase bg-[#1a1a1a] text-[#bfbfbf] px-1.5 py-0.5 border border-[#3c3c3c]">
+              <span className="hidden xs:inline text-[10px] font-mono uppercase bg-[#1a1a1a] text-[#bfbfbf] px-1.5 py-0.5 border border-[#3c3c3c]">
                 VOLUNTEER NODE
               </span>
             </div>
-            <span className="text-[11px] font-mono text-[#737373] tracking-tight">
+            <span className="hidden sm:block text-[11px] font-mono text-[#737373] tracking-tight">
               TEMPORARY MEDIA INGESTION PORTAL
             </span>
           </div>
         </div>
 
         {/* Center / Right controls */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 ml-auto">
           <StatusBadge state={connectionState} className="hidden md:inline-flex" />
 
           {/* Node Docs Trigger */}
           <button
             onClick={onOpenDocs}
             className="text-xs font-mono text-[#bfbfbf] hover:text-[#f5f5f5] px-2.5 py-1.5 border border-[#3c3c3c] hover:border-[#bfbfbf] transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Inspect Pi backend contract"
+            title="Inspect node backend contract"
           >
             <Radio className="w-3.5 h-3.5 text-[#ff4f2b]" />
             <span className="hidden sm:inline">CONTRACT</span>
@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuth, onOpenConfig, onOpen
           <button
             onClick={onOpenConfig}
             className="text-xs font-mono text-[#bfbfbf] hover:text-[#f5f5f5] p-1.5 border border-[#3c3c3c] hover:border-[#bfbfbf] transition-colors cursor-pointer"
-            title="Configure Pi Target Host & Port"
+            title="Configure node target host & port"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAuth, onOpenConfig, onOpen
           ) : (
             <button
               onClick={onOpenAuth}
-              className="text-xs font-mono uppercase tracking-wider text-[#000000] bg-[#ff4f2b] hover:bg-[#e04523] px-3.5 py-1.5 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="text-[10px] sm:text-xs font-mono uppercase tracking-wider text-[#000000] bg-[#ff4f2b] hover:bg-[#e04523] px-2 sm:px-3.5 py-2 min-h-10 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Lock className="w-3.5 h-3.5" />
               <span>AUTHENTICATE</span>

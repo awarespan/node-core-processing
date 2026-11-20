@@ -1,8 +1,8 @@
 /**
- * AWARESPAN Volunteer Portal — Raspberry Pi Integration Client
+ * AWARESPAN Volunteer Portal — AWARESPAN Node Integration Client
  *
  * Implements communication with the AWARESPAN edge node runtime:
- * - Production Mode: Connects directly to verified Raspberry Pi endpoints
+ * - Production Mode: Connects directly to verified AWARESPAN node endpoints
  *   (ws://<host>:8766/ingest and ws://<host>:8766/health).
  *   Strictly adheres to node_runtime protocol: NEVER fabricates responses.
  * - Dev/Mock Mode: High-fidelity simulator for end-to-end testing without hardware.
@@ -79,7 +79,7 @@ export class PiConnectionClient {
   }
 
   /**
-   * Check if Raspberry Pi node is online by probing /health.
+   * Check if AWARESPAN node is online by probing /health.
    */
   public async checkHealth(): Promise<{ online: boolean; nodeId?: string; capabilities?: PiNodeCapabilities; error?: string }> {
     if (this.config.mockMode) {
@@ -288,8 +288,8 @@ export class PiConnectionClient {
   }
 
   /**
-   * Subscribe to the Pi's read-only dashboard stream. Annotated JPEG frames
-   * already contain boxes drawn by the Pi's inference pipeline.
+   * Subscribe to the node's read-only dashboard stream. Annotated JPEG frames
+   * already contain boxes drawn by the node inference pipeline.
    */
   private connectDashboardFeed(): void {
     if (this.config.mockMode || !this.isConnected || this.manualStop) return;
@@ -353,7 +353,7 @@ export class PiConnectionClient {
         this.isVolunteering = true;
         this.callbacks.onStatusChange('connected');
 
-        // Simulate Pi node individual source acknowledgements
+        // Simulate node individual source acknowledgements
         if (this.activeMode === 'camera' || this.activeMode === 'both') {
           setTimeout(() => {
             this.callbacks.onSourceAcknowledged('camera');
@@ -433,7 +433,7 @@ export class PiConnectionClient {
       }, delayMs);
     } else {
       this.callbacks.onStatusChange('disconnected');
-      this.callbacks.onError(`Connection failed after ${this.maxReconnectAttempts} reconnect attempts. Raspberry Pi unreachable.`);
+      this.callbacks.onError(`Connection failed after ${this.maxReconnectAttempts} reconnect attempts. AWARESPAN node unreachable.`);
       this.disconnect();
     }
   }
@@ -464,7 +464,7 @@ export class PiConnectionClient {
   }
 
   /**
-   * Transmit audio chunk to Raspberry Pi (when audio ingestion endpoint is available).
+   * Transmit audio chunk to AWARESPAN node (when audio ingestion endpoint is available).
    */
   public sendAudioChunk(_chunk: ArrayBuffer | Blob): boolean {
     if (!this.isConnected) return false;
