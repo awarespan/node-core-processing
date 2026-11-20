@@ -21,6 +21,20 @@ read_env() { sed -n "s/^$1=//p" "${AWARESPAN_ENV_FILE}" | tail -n 1 | tr -d '\r'
 RUNTIME_PORT="$(read_env RUNTIME_PORT)"; RUNTIME_PORT="${RUNTIME_PORT:-8766}"
 GATEWAY_PORT="$(read_env VOLUNTEER_GATEWAY_PORT)"; GATEWAY_PORT="${GATEWAY_PORT:-8443}"
 TLS="$(read_env VOLUNTEER_GATEWAY_TLS)"; TLS="${TLS:-false}"
+# Keep the launcher usable by an ordinary Linux user. Preserve the configured
+# system state path when writable; otherwise fall back to repo-local state.
+STATE_DIR="$(read_env AWARESPAN_STATE_DIR)"; STATE_DIR="${STATE_DIR:-/var/lib/awarespan}"
+if ! mkdir -p "${STATE_DIR}" 2>/dev/null || [[ ! -w "${STATE_DIR}" ]]; then
+  STATE_DIR="${ROOT}/state/runtime"
+  mkdir -p "${STATE_DIR}"
+  chmod 700 "${STATE_DIR}"
+  export AWARESPAN_STATE_DIR="${STATE_DIR}"
+  TOTP_FILE="$(read_env TOTP_SECRET_FILE)"
+  if [[ -z "${TOTP_FILE}" || "${TOTP_FILE}" == "/var/lib/awarespan/totp_secret.json" ]]; then
+    export TOTP_SECRET_FILE="${STATE_DIR}/totp_secret.json"
+  fi
+  echo "  State path:   ${STATE_DIR} (configured system path is not writable)"
+fi
 if [[ "${TLS,,}" == "true" ]]; then SCHEME="https"; WS_SCHEME="wss"; else SCHEME="http"; WS_SCHEME="ws"; fi
 mapfile -t LAN_IPS < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | sort -u || true)
 echo "AWARESPAN Linux node starting on ${HOSTNAME:-this device}"
