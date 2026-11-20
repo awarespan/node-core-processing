@@ -47,7 +47,8 @@ if [[ "${TLS,,}" == "true" ]]; then
 else
   SCHEME="http"; WS_SCHEME="ws"
 fi
-mapfile -t LAN_IPS < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | sort -u || true)
+DEFAULT_LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
+mapfile -t LAN_IPS < <({ [[ -n "${DEFAULT_LAN_IP}" ]] && echo "${DEFAULT_LAN_IP}"; hostname -I 2>/dev/null | tr ' ' '\n'; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | awk '!seen[$0]++' || true)
 echo "AWARESPAN Linux node starting on ${HOSTNAME:-this device}"
 echo "  Local portal: ${SCHEME}://127.0.0.1:${GATEWAY_PORT}/"
 for ip in "${LAN_IPS[@]}"; do echo "  LAN portal:   ${SCHEME}://${ip}:${GATEWAY_PORT}/"; done

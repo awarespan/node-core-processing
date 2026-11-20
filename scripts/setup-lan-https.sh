@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CERT_DIR="${ROOT}/state/certs"
 STATIC_DIR="${ROOT}/static/volunteer"
-LAN_IP="${1:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+LAN_IP="${1:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')}"
+LAN_IP="${LAN_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
 if [[ -z "${LAN_IP}" ]]; then
   echo "Could not determine LAN IP. Usage: $0 <LAN-IP>" >&2
   exit 2
