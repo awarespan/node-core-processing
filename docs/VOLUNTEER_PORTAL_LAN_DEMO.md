@@ -28,7 +28,7 @@ On the same host, `http://127.0.0.1:8443/` is a convenient local smoke-test URL.
 3. Set `VOLUNTEER_GATEWAY_TLS=true` in the repository `.env` and restart `./scripts/run-demo.sh`.
 4. Open `https://awarespan.local:8443/` or `https://<LAN-IP>:8443/`.
 
-The certificate includes both the specified IP and `awarespan.local`. Keep the CA private key in `state/certs/` (mode 0600); do not commit it. Re-running the certificate script with a different IP retains the existing local CA and reissues the host certificate.
+The certificate includes both the specified IP and `awarespan.local`. Keep the CA private key in `state/certs/` (mode 0600); do not commit it. Re-running the certificate script with a different IP retains the existing local CA and reissues the host certificate. To avoid reinstalling a different CA on the phone when switching from laptop to Pi, securely copy `state/certs/awarespan-lan-ca.crt` and `state/certs/awarespan-lan-ca.key` from the first host to the same directory on the next host before running the script there. The phone then trusts the same CA while each host receives its own IP-specific server certificate. Never send the private CA key through chat or commit it.
 
 ## Codespace validation
 
