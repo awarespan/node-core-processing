@@ -332,7 +332,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
   const logout = useCallback(() => {
     // Stop any active volunteering session
     if (connectionState !== 'NOT_CONNECTED') {
-      stopVolunteering();
+      stopVolunteering('operator_logout');
     }
     clearSession();
     setSession(null);
@@ -345,7 +345,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
     const timer = setInterval(() => {
       if (session && !isSessionValid(session)) {
         addLog('warn', 'auth', 'Operator session expired. Terminating volunteer pipeline.');
-        stopVolunteering();
+        stopVolunteering('session_expired');
         clearSession();
         setSession(null);
         setConnectionState('SESSION_EXPIRED');
@@ -528,7 +528,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [session, volunteerMode, devices, permissionState, config, updateTelemetry, addLog, refreshDevices]);
 
   // Stop volunteering workflow
-  const stopVolunteering = useCallback(() => {
+  const stopVolunteering = useCallback((reason: string = 'operator_stop') => {
     // 1. Clear intervals
     if (frameIntervalRef.current !== null) {
       clearInterval(frameIntervalRef.current);
@@ -552,7 +552,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     // 3. Disconnect from node
     if (piClientRef.current) {
-      piClientRef.current.disconnect();
+      piClientRef.current.disconnect(false, reason);
     }
 
     setConnectionState('STOPPED_BY_USER');
@@ -564,7 +564,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       audioRmsLevel: 0,
     });
 
-    addLog('info', 'system', 'Volunteer session terminated by user. Media tracks stopped.');
+    addLog('info', 'system', `Volunteer session stopped (${reason}). Media tracks stopped.`);
   }, [addLog, updateTelemetry]);
 
   useEffect(() => {
@@ -588,7 +588,7 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Handle browser tab close, unload, and network status changes
   useEffect(() => {
     const handleBeforeUnload = () => {
-      stopVolunteering();
+      stopVolunteering('page_unload');
     };
 
     const handleOffline = () => {
