@@ -242,6 +242,18 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
       },
       onSourceRejected: (source, reason) => {
         addLog('error', 'media', `Node rejected ${source} input: ${reason}`);
+        if (source === 'microphone') {
+          // Audio is an optional capability. A microphone rejection must not
+          // terminate an already-authorized camera stream.
+          const remainingStream = mediaManagerRef.current.stopAudioCapture();
+          setLocalStream(remainingStream);
+          if (videoRef.current) videoRef.current.srcObject = remainingStream;
+          if (audioIntervalRef.current !== null) clearInterval(audioIntervalRef.current);
+          audioIntervalRef.current = null;
+          updateTelemetry({ microphoneActive: false, audioPeakLevel: 0, audioRmsLevel: 0 });
+          setVolunteerMode('camera');
+          return;
+        }
         mediaManagerRef.current.stopCapture();
         setLocalStream(null);
         if (videoRef.current) videoRef.current.srcObject = null;
