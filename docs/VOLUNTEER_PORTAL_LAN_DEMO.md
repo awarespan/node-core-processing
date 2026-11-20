@@ -12,9 +12,19 @@ The temporary volunteer portal is built and served by the Node's existing volunt
    ./scripts/setup-lan-https.sh 192.168.1.50
    ```
 
-4. On each Android device, open `https://<PI-LAN-IP>:8443/awarespan-lan-ca.crt`, download the certificate, then install it under **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**. Android wording varies by vendor/version. This is necessary because browser camera access requires a secure context; plain HTTP on a LAN IP is not sufficient.
-5. Set `VOLUNTEER_GATEWAY_TLS=true` in the node `.env`, then restart `awarespan-node.service`.
+4. While the gateway is still on HTTP, download `http://<PI-LAN-IP>:8443/awarespan-lan-ca.crt` on each Android device. Install it under **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**. Android wording varies by vendor/version. This CA trust step is necessary because browser camera access requires a secure context; plain HTTP on a LAN IP is not sufficient.
+5. Set `VOLUNTEER_GATEWAY_TLS=true` in the node `.env`, then restart `awarespan-node.service`. The volunteer gateway and dashboard/health WebSocket will both switch to TLS using the same certificate.
 6. Open `https://<PI-LAN-IP>:8443/` from a phone/laptop on the same non-isolated Wi-Fi network.
+
+To rebuild after editing the portal source:
+
+```bash
+cd web/volunteer-portal
+npm ci
+npm test
+npm run build
+rsync -a --delete dist/ ../../static/volunteer/
+```
 
 The portal uses its own origin for the HTTP authentication endpoint and volunteer WebSocket. The node inference/dashboard WebSocket remains on port `8766`, so both `8443/tcp` and `8766/tcp` must be reachable from LAN clients. Do not expose either port to the public internet for this demo.
 
