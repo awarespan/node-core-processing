@@ -557,11 +557,21 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => {
     if (piCapabilities?.speaker_output_available && telemetry.microphoneActive) {
-      addLog('warn', 'media', 'Node audio output appeared while browser microphone was active. Stopping volunteer media and releasing browser devices.');
-      stopVolunteering();
+      // A node-owned speaker/microphone conflict must not tear down an otherwise
+      // healthy donated camera. Release only the browser microphone and retain
+      // the authenticated WebSocket plus video capture loop.
+      const remainingStream = mediaManagerRef.current.stopAudioCapture();
+      setLocalStream(remainingStream);
+      if (videoRef.current) videoRef.current.srcObject = remainingStream;
+      if (audioIntervalRef.current !== null) {
+        clearInterval(audioIntervalRef.current);
+        audioIntervalRef.current = null;
+      }
+      updateTelemetry({ microphoneActive: false, audioPeakLevel: 0, audioRmsLevel: 0 });
       setVolunteerMode('camera');
+      addLog('warn', 'media', 'Node audio output owns the audio path. Released the donated microphone; camera donation remains connected.');
     }
-  }, [piCapabilities, telemetry.microphoneActive, stopVolunteering, addLog]);
+  }, [piCapabilities, telemetry.microphoneActive, updateTelemetry, addLog]);
 
   // Handle browser tab close, unload, and network status changes
   useEffect(() => {
@@ -579,13 +589,11 @@ export const VolunteerProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };

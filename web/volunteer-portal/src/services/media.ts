@@ -194,6 +194,32 @@ export class MediaCaptureManager {
   }
 
   /**
+   * Release only the microphone while preserving an active camera stream.
+   * The volunteer session may continue with video when node audio capabilities
+   * change after pairing; stopping every track would tear down the camera too.
+   */
+  public stopAudioCapture(): MediaStream | null {
+    if (this.mediaStream) {
+      this.mediaStream.getAudioTracks().forEach((track) => track.stop());
+      const videoTracks = this.mediaStream.getVideoTracks().filter((track) => track.readyState === 'live');
+      this.mediaStream = videoTracks.length > 0 ? new MediaStream(videoTracks) : null;
+    }
+    if (this.audioSourceNode) {
+      this.audioSourceNode.disconnect();
+      this.audioSourceNode = null;
+    }
+    if (this.analyserNode) {
+      this.analyserNode.disconnect();
+      this.analyserNode = null;
+    }
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      void this.audioContext.close().catch((error) => console.warn('[MediaCaptureManager] AudioContext close error:', error));
+    }
+    this.audioContext = null;
+    return this.mediaStream;
+  }
+
+  /**
    * Stops all active audio and video tracks immediately.
    * Releases hardware handles so camera/mic LEDs turn off.
    */
