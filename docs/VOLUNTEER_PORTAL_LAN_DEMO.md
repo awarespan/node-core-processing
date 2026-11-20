@@ -19,7 +19,7 @@ The volunteer portal is part of the Node runtime and is served by its volunteer 
    ./scripts/run-demo.sh
    ```
 
-The launcher binds runtime and volunteer gateway to `0.0.0.0`, prints every detected LAN IPv4 address, and (when Avahi is installed and running) advertises the same `awarespan.local` name on the active device. Run only one node on a given LAN at a time. If mDNS is unavailable on a client, use the LAN IP printed by the launcher. Both TCP ports `8443` and `8766` must be reachable from the phone/client.
+The launcher binds runtime and volunteer gateway to `0.0.0.0`, prints every detected LAN IPv4 address, and advertises the same `awarespan.local` name on the active device when Avahi is installed and running. The Linux setup wizard installs Avahi and enables its daemon on systemd hosts. Run only one node on a given LAN at a time. If mDNS is unavailable on a client, use the LAN IP printed by the launcher. Both TCP ports `8443` and `8766` must be reachable from the phone/client.
 
 On the same host, `http://127.0.0.1:8443/` is a convenient local smoke-test URL. Browser camera/microphone APIs are only available in secure contexts; localhost is treated as secure, but a LAN IP over plain HTTP is not. For phone camera access:
 

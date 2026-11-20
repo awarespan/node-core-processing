@@ -238,14 +238,19 @@ fi
 
 # Install host packages using the detected Linux package manager.
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y python3 python3-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2
+  sudo dnf install -y python3 python3-devel gcc gcc-c++ make git curl libgomp mesa-libGL glib2 avahi avahi-tools
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
-  sudo apt-get install -y python3 python3-dev python3-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0
+  sudo apt-get install -y python3 python3-dev python3-venv python3-pip git curl build-essential libopenblas-dev libgl1 libglib2.0-0 avahi-daemon avahi-utils
 elif command -v zypper >/dev/null 2>&1; then
-  sudo zypper --non-interactive install python3 python3-devel python3-pip gcc gcc-c++ make git curl libgomp1
+  sudo zypper --non-interactive install python3 python3-devel python3-pip gcc gcc-c++ make git curl libgomp1 avahi avahi-utils
 else
   echo "Unsupported package manager. Install CPython 3.11 or 3.12 with venv/pip, Git, compiler tools and OpenCV runtime libraries manually." >&2
+fi
+
+# Publish the shared awarespan.local LAN name when the host uses systemd.
+if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+  sudo systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
 fi
 
 if ! command -v "$PYTHON_BOOTSTRAP" >/dev/null 2>&1; then
