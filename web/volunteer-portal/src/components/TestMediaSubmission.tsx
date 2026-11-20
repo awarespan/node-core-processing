@@ -35,7 +35,7 @@ export const TestMediaSubmission: React.FC = () => {
       .then((data) => {
         const nodeId = typeof data.node_id === 'string' ? data.node_id.trim() : '';
         if (!nodeId) throw new Error('The local node has not completed backend enrollment.');
-        setNodes([{ id: nodeId, name: `Local AWARESPAN node (${nodeId})`, status: 'ONLINE' }]);
+        setNodes([{ id: nodeId, name: `Local AWARESPAN node (${nodeId})`, status: 'LOCAL' }]);
         setSelectedNodeId(nodeId);
         setStatusMessage('Connected to the active local node identity.');
       })
@@ -112,7 +112,7 @@ export const TestMediaSubmission: React.FC = () => {
       setUploadStatus('PROCESSING');
       setStatusMessage(`Backend accepted ${currentMediaId}. Waiting for node inference...`);
 
-      for (let attempt = 0; attempt < 15; attempt += 1) {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
         await new Promise(resolve => window.setTimeout(resolve, 1500));
         const pollRes = await fetch(`${backendBaseUrl}/api/v1/media/${encodeURIComponent(currentMediaId)}/result`);
         if (!pollRes.ok) {
@@ -134,12 +134,12 @@ export const TestMediaSubmission: React.FC = () => {
         if (resData.status === 'FAILED' || resData.status === 'ERROR') {
           throw new Error(resData.message || 'The node reported a media processing failure.');
         }
-        setProgress(Math.min(90, 55 + Math.round(((attempt + 1) / 15) * 35)));
+        setProgress(Math.min(90, 55 + Math.round(((attempt + 1) / 40) * 35)));
       }
 
       setUploadStatus('FAILED');
       setProgress(100);
-      setStatusMessage(`Backend accepted ${currentMediaId}, but the node did not report an inference result within 22.5 seconds. Check the node command-polling and runtime logs; this upload is NOT marked completed.`);
+      setStatusMessage(`Backend accepted ${currentMediaId}, but the node did not report an inference result within 60 seconds. Check the node command-polling and runtime logs; this upload is NOT marked completed.`);
       console.error('[AWARESPAN upload] Processing acknowledgement timed out', { mediaId: currentMediaId, nodeId: selectedNodeId });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
