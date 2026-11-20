@@ -12,6 +12,9 @@ if [[ ! -f "${ROOT}/static/volunteer/index.html" ]]; then
   exit 2
 fi
 export AWARESPAN_ENV_FILE="${AWARESPAN_ENV_FILE:-${ROOT}/.env}"
+# The portal build always lives beside this checkout; ignore stale absolute paths
+# left behind by copying a .env from another Linux device.
+export VOLUNTEER_PORTAL_STATIC_DIR="${ROOT}/static/volunteer"
 if [[ ! -f "${AWARESPAN_ENV_FILE}" ]]; then
   echo "Missing ${AWARESPAN_ENV_FILE}. Run ./scripts/setup.sh first." >&2
   exit 2
@@ -35,7 +38,15 @@ if ! mkdir -p "${STATE_DIR}" 2>/dev/null || [[ ! -w "${STATE_DIR}" ]]; then
   fi
   echo "  State path:   ${STATE_DIR} (configured system path is not writable)"
 fi
-if [[ "${TLS,,}" == "true" ]]; then SCHEME="https"; WS_SCHEME="wss"; else SCHEME="http"; WS_SCHEME="ws"; fi
+if [[ "${TLS,,}" == "true" ]]; then
+  SCHEME="https"; WS_SCHEME="wss"
+  if [[ ! -s "${ROOT}/state/certs/volunteer_gateway.crt" || ! -s "${ROOT}/state/certs/volunteer_gateway.key" ]]; then
+    echo "TLS is enabled but the LAN certificate is missing. Run ./scripts/setup-lan-https.sh <LAN-IP>, or disable VOLUNTEER_GATEWAY_TLS for local-only testing." >&2
+    exit 2
+  fi
+else
+  SCHEME="http"; WS_SCHEME="ws"
+fi
 mapfile -t LAN_IPS < <(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | sort -u || true)
 echo "AWARESPAN Linux node starting on ${HOSTNAME:-this device}"
 echo "  Local portal: ${SCHEME}://127.0.0.1:${GATEWAY_PORT}/"
