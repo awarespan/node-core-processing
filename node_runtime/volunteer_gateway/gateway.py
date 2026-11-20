@@ -407,7 +407,8 @@ class VolunteerGatewayServer:
 
                     # 5. Disconnect signal
                     elif mtype == "disconnect":
-                        log.info("Volunteer %s sent disconnect signal", session.source_id)
+                        reason = str(data.get("reason", "client_request"))[:80]
+                        log.info("Volunteer %s sent disconnect signal (reason=%s)", session.source_id, reason)
                         break
 
                 # Binary Frame: Direct AWSP Media Stream
@@ -423,12 +424,17 @@ class VolunteerGatewayServer:
                         continue
 
                     if pkt.packet_type == PacketType.FRAME_JPEG:
-                        self.router.ingest_frame(
+                        accepted = self.router.ingest_frame(
                             source_id=session.source_id,
                             frame_id=pkt.seq_id,
                             source_ts_ms=pkt.timestamp_ms,
                             jpeg_bytes=pkt.payload,
                         )
+                        if accepted:
+                            source = self.registry.get_source(session.source_id)
+                            if source and source.frames_received == 1:
+                                log.info("First volunteer camera frame received: source=%s frame=%d bytes=%d",
+                                         session.source_id, pkt.seq_id, len(pkt.payload))
                     elif pkt.packet_type == PacketType.AUDIO_PCM:
                         self.router.ingest_audio(
                             source_id=session.source_id,

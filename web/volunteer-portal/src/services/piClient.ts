@@ -489,7 +489,7 @@ export class PiConnectionClient {
   /**
    * Gracefully stop volunteering and close connection.
    */
-  public disconnect(suppressStatusUpdate: boolean = false): void {
+  public disconnect(suppressStatusUpdate: boolean = false, reason: string = 'client_cleanup'): void {
     this.manualStop = true;
     this.isVolunteering = false;
     this.isConnected = false;
@@ -506,7 +506,7 @@ export class PiConnectionClient {
     if (this.ws) {
       try {
         if (this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: 'disconnect', ts_ms: Date.now() }));
+          this.ws.send(JSON.stringify({ type: 'disconnect', ts_ms: Date.now(), reason }));
         }
         this.ws.close();
       } catch (e) {
