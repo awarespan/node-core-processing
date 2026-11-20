@@ -52,11 +52,11 @@ if [[ ! -x "${PYTHON_EXEC}" ]]; then
     exit 2
 fi
 PYTHON_MINOR="$("${PYTHON_EXEC}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-if [[ "${PYTHON_MINOR}" != "3.11" ]]; then
-    echo "AWARESPAN requires CPython 3.11; found ${PYTHON_MINOR}. Re-run ./scripts/setup.sh." >&2
+if [[ "${PYTHON_MINOR}" != "3.11" && "${PYTHON_MINOR}" != "3.12" ]]; then
+    echo "AWARESPAN requires CPython 3.11 or 3.12; found ${PYTHON_MINOR}. Re-run ./scripts/setup.sh." >&2
     exit 2
 fi
-echo "Using the pinned Python environment: ${PYTHON_EXEC} (CPython ${PYTHON_MINOR})"
+echo "Using the prepared Python environment: ${PYTHON_EXEC} (CPython ${PYTHON_MINOR})"
 
 # 6. Use the one repository-root configuration shared by all AWARESPAN components.
 ENV_TARGET="${AWARESPAN_ENV_FILE:-${REPO_ROOT}/.env}"
