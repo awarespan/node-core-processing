@@ -36,6 +36,7 @@ from node_runtime.deterrence.siren import DeterrenceController
 from node_runtime.communications.event_queue import EventQueueManager
 from node_runtime.media.routing.media_router import CoreMediaRouter
 from node_runtime.media.ingestion.frame_buffer import FramePacket
+from node_runtime.media.device_capabilities import detect_media_capabilities
 from node_runtime.monitoring.telegram_lifecycle import TelegramLifecycleNotifier
 from node_runtime.monitoring.telegram_notify import send_message
 from node_runtime.volunteer_gateway.gateway import VolunteerGatewayServer
@@ -106,14 +107,19 @@ class RuntimeCore:
         self.deterrence.enabled = bool(armed)
         if hasattr(self, "response_selector"):
             self.response_selector.siren_enabled = bool(armed)
+        devices = detect_media_capabilities()
         return {
+            **devices,
             "speaker_output_available": available,
             "speaker_output_device": str(status.get("device") or ""),
             "speaker_output_cards": status.get("cards", []),
             "speaker_output_reason": str(status.get("reason") or "unknown"),
-            # The current node runtime does not ingest volunteer microphone audio yet.
-            # Fail closed even when no playback interface is present.
+            # The portal supplies video only when the Pi has no usable camera.
+            "browser_camera_allowed": not bool(devices["camera_available"]),
+            # Audio capture is deliberately fail-closed until the Pi audio
+            # inference path is deployed and playback/capture ownership is safe.
             "browser_microphone_allowed": False,
+            "browser_microphone_reason": "node_audio_ingestion_not_deployed",
             "audio_owner": "raspberry_pi" if available else "none",
         }
 
@@ -287,7 +293,11 @@ class RuntimeCore:
                     mode = data.get("mode", "camera")
                     caps = self.refresh_audio_capabilities()
                     if mode in ("camera", "both"):
-                        await websocket.send(json.dumps({"type": "ack", "source": "camera"}))
+                        if caps["browser_camera_allowed"]:
+                            await websocket.send(json.dumps({"type": "ack", "source": "camera"}))
+                        else:
+                            await websocket.send(json.dumps({"type": "source_rejected", "source": "camera",
+                                                             "reason": "Pi camera is available; browser camera donation is not needed."}))
                     if mode in ("microphone", "both"):
                         reason = ("Pi audio output is attached; browser audio capture is disabled."
                                   if caps["speaker_output_available"] else

@@ -10,7 +10,7 @@ Clone the repository, enter it, and run:
 ./scripts/setup.sh
 ```
 
-The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, install Pi system services, and configure the optional Telegram operator bot. The dependency baseline is CPython 3.11 with exact package pins. The installer replaces an incompatible existing virtual environment, installs the CPU-only PyTorch 2.5.1 / torchvision 0.20.1 pair first, and refuses source builds. Selecting ML training installs the complete development/test stack plus the dedicated dataset/training packages. All components use the same sectioned root `.env`, created from `.env.example` and protected with mode `0600`. Safe defaults are used: production connectivity, training and Telegram remain off unless selected.
+The setup wizard detects Raspberry Pi hardware versus a general Linux machine and asks whether to install ML training dependencies, connect to the production backend, install Pi system services, and configure the optional Telegram operator bot. The supported interpreter range is CPython 3.11 and 3.12 (CI tests both; 3.11 remains the Pi baseline) with exact package pins. The installer replaces an incompatible existing virtual environment, installs the CPU-only PyTorch 2.5.1 / torchvision 0.20.1 pair first, and refuses source builds. Selecting ML training installs the complete development/test stack plus the dedicated dataset/training packages. All components use the same sectioned root `.env`, created from `.env.example` and protected with mode `0600`. Safe defaults are used: production connectivity, training and Telegram remain off unless selected.
 
 The same choices are available as flags for automation:
 
@@ -52,7 +52,7 @@ A Linux workstation can connect to production REST APIs when explicitly configur
 
 ## Raspberry Pi production
 
-Use a 64-bit Raspberry Pi OS image whose repositories provide CPython 3.11 (the validated baseline is Raspberry Pi OS Bookworm), complete first boot, clone this repository and run `./scripts/setup.sh`. The Pi profile installs runtime dependencies and can install the production systemd services. It never installs ML training dependencies. See [`docs/RASPBERRY_PI_SETUP.md`](docs/RASPBERRY_PI_SETUP.md).
+Use a 64-bit Raspberry Pi OS image whose repositories provide CPython 3.11 (the validated Pi baseline is Raspberry Pi OS Bookworm), complete first boot, clone this repository and run `./scripts/setup.sh`. The Pi profile installs runtime dependencies and can install the production systemd services. It never installs ML training dependencies. See [`docs/RASPBERRY_PI_SETUP.md`](docs/RASPBERRY_PI_SETUP.md).
 
 ## Architecture
 

@@ -12,8 +12,8 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 PYTHON_MINOR="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-if [[ "$PYTHON_MINOR" != "3.11" ]]; then
-  echo "AWARESPAN tests require CPython 3.11; found $PYTHON_MINOR at $PYTHON" >&2
+if [[ "$PYTHON_MINOR" != "3.11" && "$PYTHON_MINOR" != "3.12" ]]; then
+  echo "AWARESPAN tests require CPython 3.11 or 3.12; found $PYTHON_MINOR at $PYTHON" >&2
   exit 2
 fi
 
@@ -42,7 +42,7 @@ Suites:
   all     Entire test suite (default)
   list    List collected tests without executing them
 
-The runner uses .venv/bin/python by default and requires CPython 3.11.
+The runner uses .venv/bin/python by default and supports CPython 3.11 or 3.12.
 Override the interpreter with AWARESPAN_TEST_PYTHON=/path/to/python.
 USAGE
     ;;
