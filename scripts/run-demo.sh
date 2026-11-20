@@ -38,6 +38,53 @@ if ! mkdir -p "${STATE_DIR}" 2>/dev/null || [[ ! -w "${STATE_DIR}" ]]; then
   fi
   echo "  State path:   ${STATE_DIR} (configured system path is not writable)"
 fi
+# Recover ports left behind by an interrupted AWARESPAN run. Only terminate
+# listeners whose command line identifies this node runtime; never kill an
+# unrelated service that happens to use the same port.
+free_awarespan_port() {
+  local port="$1" pids pid cmd found=0
+  if ! command -v fuser >/dev/null 2>&1; then
+    echo "Cannot safely reclaim TCP port ${port}: install psmisc (fuser) and retry." >&2
+    return 1
+  fi
+  pids="$(fuser -n tcp "${port}" 2>/dev/null || true)"
+  [[ -n "${pids// /}" ]] || return 0
+  for pid in ${pids}; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    [[ -r "/proc/${pid}/cmdline" ]] || continue
+    cmd="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+    if [[ "${cmd}" == *"node_runtime.main"* ]]; then
+      echo "  Reclaiming TCP port ${port} from stale AWARESPAN process ${pid}"
+      kill -TERM "${pid}" 2>/dev/null || true
+      found=1
+    else
+      echo "TCP port ${port} is occupied by a non-AWARESPAN process (PID ${pid}): ${cmd}" >&2
+      echo "Refusing to terminate an unrelated service. Stop it yourself, then rerun." >&2
+      return 1
+    fi
+  done
+  if [[ "${found}" -eq 1 ]]; then
+    for _ in {1..20}; do
+      pids="$(fuser -n tcp "${port}" 2>/dev/null || true)"
+      [[ -n "${pids// /}" ]] || break
+      sleep 0.25
+    done
+    pids="$(fuser -n tcp "${port}" 2>/dev/null || true)"
+    for pid in ${pids}; do
+      [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+      cmd="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+      if [[ "${cmd}" == *"node_runtime.main"* ]]; then
+        echo "  Force-stopping stale AWARESPAN process ${pid} on port ${port}"
+        kill -KILL "${pid}" 2>/dev/null || true
+      else
+        echo "TCP port ${port} remains occupied by a non-AWARESPAN process (PID ${pid}); refusing to kill it." >&2
+        return 1
+      fi
+    done
+  fi
+}
+free_awarespan_port "${GATEWAY_PORT}"
+free_awarespan_port "${RUNTIME_PORT}"
 if [[ "${TLS,,}" == "true" ]]; then
   SCHEME="https"; WS_SCHEME="wss"
   if [[ ! -s "${ROOT}/state/certs/volunteer_gateway.crt" || ! -s "${ROOT}/state/certs/volunteer_gateway.key" ]]; then
